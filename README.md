@@ -2,6 +2,9 @@
 
 เครื่องมือทำภาพหลักฐาน "ยิงขึ้นรถ Shuttle แล้ว" (FMHub_LHTransported) ทำงานในเบราว์เซอร์ทั้งหมด ไม่มี backend ไม่อัปโหลดคลิป
 
+- เปิดใช้: https://bangz27.github.io/cctv-evidence-maker/
+- **คู่มือการใช้งาน: [MANUAL.md](MANUAL.md)**
+
 ## ใช้งาน
 
 ```bash

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CCTV Evidence Maker</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>CCTV Evidence Maker</h1>
+      <span class="sub">ทำภาพหลักฐาน FMHub_LHTransported · ทำงานในเบราว์เซอร์ทั้งหมด ไม่มีการอัปโหลดคลิป</span>
+    </header>
+
+    <main class="layout">
+      <section class="col-main">
+        <!-- 1. เปิดคลิป -->
+        <div class="card">
+          <div class="card-head">
+            <h2>1. เปิดคลิป CCTV</h2>
+            <label class="btn small" id="changeClipBtn" hidden>
+              เปลี่ยนคลิป <input type="file" accept="video/*,.mp4,.mkv,.avi,.mov" id="fileInput2" hidden />
+            </label>
+          </div>
+          <label class="dropzone" id="dropzone">
+            <input type="file" accept="video/*,.mp4,.mkv,.avi,.mov" id="fileInput" hidden />
+            <strong>ลากไฟล์คลิปมาวางที่นี่</strong>
+            <span>หรือคลิกเพื่อเลือกไฟล์ (.mp4 จาก DVR)</span>
+          </label>
+          <div class="alert error" id="videoError" hidden></div>
+          <div class="file-name" id="fileName"></div>
+
+          <div class="stage" id="stage" hidden>
+            <video id="video" playsinline muted preload="auto"></video>
+            <canvas id="overlay"></canvas>
+          </div>
+
+          <div id="playerControls" hidden>
+            <input type="range" id="scrubber" min="0" max="1" step="any" value="0" />
+            <div class="timeline-info">
+              <span id="timeInfo">0.00 / 0.00 วิ</span>
+              <label class="fps">fps <input type="number" id="fpsInput" min="1" max="120" step="1" value="25" /></label>
+            </div>
+            <div class="btn-row">
+              <button class="btn" data-step="-1s" title="ถอยหลัง 1 วินาที (Shift+←)">◀◀ -1s</button>
+              <button class="btn" data-step="-1f" title="ถอยหลัง 1 เฟรม (←)">◀ -1 เฟรม</button>
+              <button class="btn" id="playBtn" title="เล่น/หยุด (Space)">▶ เล่น</button>
+              <button class="btn" data-step="+1f" title="เดินหน้า 1 เฟรม (→)">+1 เฟรม ▶</button>
+              <button class="btn" data-step="+1s" title="เดินหน้า 1 วินาที (Shift+→)">+1s ▶▶</button>
+              <button class="btn primary" id="useFrameBtn">✔ ใช้เฟรมนี้</button>
+            </div>
+            <div class="chosen" id="chosenInfo">ยังไม่ได้เลือกเฟรม</div>
+          </div>
+        </div>
+
+        <!-- 2. วาด annotation -->
+        <div class="card" id="annotCard" hidden>
+          <h2>2. วาดวง / กรอบ</h2>
+          <p class="hint">ลากในวงเพื่อย้าย · ลากมุมเพื่อย่อขยาย · เลือกเครื่องมือ "+ วงรี" / "+ กรอบ" แล้วลากบนภาพเพื่อเพิ่ม · กรอบเหลืองไว้ครอบเวลามุมจอ (ห้ามทับ/แก้เวลา)</p>
+          <div class="btn-row">
+            <div class="seg" id="toolSeg">
+              <button class="btn active" data-tool="select">เลือก/ย้าย</button>
+              <button class="btn" data-tool="ellipse">+ วงรีแดง</button>
+              <button class="btn" data-tool="rect">+ กรอบเหลือง</button>
+            </div>
+            <button class="btn" id="deleteShapeBtn">ลบที่เลือก</button>
+            <button class="btn" id="undoBtn">↶ Undo</button>
+            <button class="btn" id="resetBtn">Reset</button>
+          </div>
+        </div>
+
+        <!-- 4. ภาพ FMS -->
+        <div class="card">
+          <h2>4. ภาพ FMS ต่อเลขพัสดุ</h2>
+          <p class="hint">เลือกเลขพัสดุ แล้วกด <kbd>Ctrl</kbd>+<kbd>V</kbd> วางภาพแคป หรือกด "เลือกไฟล์" · จากนั้นคลิกบนภาพตรงบรรทัด FMHub_LHPacking เพื่อให้ลูกศรชี้</p>
+          <ul class="parcel-list" id="parcelList"></ul>
+          <div class="fms-editor" id="fmsEditor" hidden>
+            <div class="hint" id="fmsPointInfo"></div>
+            <canvas id="fmsCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- ผลลัพธ์ -->
+        <div class="card" id="resultCard" hidden>
+          <h2>ผลลัพธ์</h2>
+          <div class="alert" id="resultMsg" hidden></div>
+          <img id="evidencePreview" class="evidence-preview" alt="ตัวอย่างภาพหลักฐาน" hidden />
+          <ul class="file-list" id="fileList"></ul>
+        </div>
+      </section>
+
+      <aside class="col-side">
+        <!-- 3. ข้อมูลเคส -->
+        <div class="card">
+          <h2>3. ข้อมูลเคส</h2>
+          <div class="field">
+            <label for="toInput">TO number</label>
+            <input id="toInput" placeholder="TO20260920CM2W7" autocomplete="off" />
+          </div>
+          <div class="grid2">
+            <div class="field">
+              <label for="fmsTimeInput">เวลา FMHub_LHPacking</label>
+              <input id="fmsTimeInput" placeholder="20:52:25" inputmode="numeric" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="cctvTimeInput">เวลา CCTV (อ่านจากจอ)</label>
+              <input id="cctvTimeInput" placeholder="20:52:25" inputmode="numeric" autocomplete="off" />
+            </div>
+          </div>
+          <div class="time-match" id="timeMatch"></div>
+          <div class="field">
+            <label for="destInput">ปลายทาง</label>
+            <input id="destInput" list="destList" placeholder="SOCN" autocomplete="off" />
+            <datalist id="destList">
+              <option value="SOCN"></option>
+              <option value="SOCE"></option>
+              <option value="SOCW"></option>
+            </datalist>
+          </div>
+          <div class="field">
+            <label for="parcelsInput">เลขพัสดุใน TO นี้ (บรรทัดละเลข)</label>
+            <textarea id="parcelsInput" rows="4" placeholder="TH2699586897989"></textarea>
+          </div>
+        </div>
+
+        <!-- 5. Export -->
+        <div class="card">
+          <h2>5. สร้างหลักฐาน</h2>
+          <div class="btn-col">
+            <button class="btn primary" id="makeOneBtn">สร้างภาพหลักฐาน (เลขที่เลือก)</button>
+            <button class="btn" id="makeAllBtn">สร้างทุกเลขใน TO นี้</button>
+          </div>
+          <h3>คลิปที่มีวง (ต่อ TO)</h3>
+          <div class="grid2">
+            <div class="field">
+              <label for="clipStart">เริ่ม (วินาทีในคลิป)</label>
+              <div class="inline"><input id="clipStart" type="number" step="0.1" min="0" /><button class="btn small" id="clipStartNow" title="ใช้ตำแหน่งปัจจุบัน">ตอนนี้</button></div>
+            </div>
+            <div class="field">
+              <label for="clipEnd">จบ (วินาทีในคลิป)</label>
+              <div class="inline"><input id="clipEnd" type="number" step="0.1" min="0" /><button class="btn small" id="clipEndNow" title="ใช้ตำแหน่งปัจจุบัน">ตอนนี้</button></div>
+            </div>
+          </div>
+          <button class="btn" id="recordBtn">● อัดคลิป 1280×720</button>
+          <progress id="recordProgress" max="1" value="0" hidden></progress>
+          <p class="hint">ระหว่างอัด อย่าสลับไปแท็บอื่น (เบราว์เซอร์จะชะลอการวาดเฟรม) · อัดแบบเวลาจริง คลิป 1 นาทีใช้เวลา 1 นาที</p>
+          <h3>ดาวน์โหลด</h3>
+          <button class="btn primary" id="zipBtn">⬇ ดาวน์โหลด ZIP ทั้งหมด</button>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

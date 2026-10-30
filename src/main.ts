@@ -1,8 +1,12 @@
+// Noto Sans Thai for the page; Sarabun stays for the text drawn into the JPG and clip.
+import '@fontsource/noto-sans-thai/400.css';
+import '@fontsource/noto-sans-thai/700.css';
 import '@fontsource/sarabun/400.css';
 import '@fontsource/sarabun/700.css';
 import './style.css';
 
 import { Annotator, type Tool } from './annotate';
+import { Attachments } from './attachments';
 import { recordClip, type ClipFormat } from './clip';
 import { ensureFonts, renderEvidence, toJpeg, type Point } from './evidence';
 import { buildZip, download, formatBytes, type OutFile } from './files';
@@ -61,6 +65,7 @@ interface FmsData {
 const vc = new VideoController(videoEl);
 const annot = new Annotator(overlay);
 const fmsData: FmsData = {};
+const attachments = new Attachments($('attachGrid'));
 let chosen: { canvas: HTMLCanvasElement; time: number } | null = null;
 // parcel = the number written on the clip's text bar when it was recorded.
 let clip: { blob: Blob; format: ClipFormat; parcel: string; stale: boolean } | null = null;
@@ -481,16 +486,18 @@ $('zipBtn').addEventListener('click', () =>
     // Always rebuild so the ZIP matches the current frame, shapes and form.
     const files: OutFile[] = [{ path: `${parcel}/${parcel}_Evidence.jpg`, blob: await makeEvidence() }];
     if (clip) files.push({ path: `${parcel}/CCTV_${parcel}.${clip.format.ext}`, blob: clip.blob });
+    files.push(...attachments.zipEntries(parcel));
     const zip = await buildZip(files);
     download(zip, `${parcel}_Evidence.zip`);
     renderFmsStatus();
     renderFiles();
+    const extra = attachments.count ? ` · รูปประกอบ ${attachments.count} รูป` : '';
     const notes = [
       clip ? '' : 'ยังไม่ได้อัดคลิป — ZIP มีแต่ภาพ',
       clip && clip.parcel !== parcel ? `คลิปอัดไว้ตอนเลขพัสดุเป็น ${clip.parcel} — อัดใหม่ให้แถบข้อความตรง` : '',
       noPointNote(),
     ].filter(Boolean);
-    showMsg(`ZIP ${formatBytes(zip.size)} · ${parcel}${notes.length ? '\n' + notes.join('\n') : ''}`, notes.length ? 'warn' : 'ok');
+    showMsg(`ZIP ${formatBytes(zip.size)} · ${parcel}${extra}${notes.length ? '\n' + notes.join('\n') : ''}`, notes.length ? 'warn' : 'ok');
   }),
 );
 
@@ -508,5 +515,5 @@ renderChosen();
 renderFmsStatus();
 
 if (import.meta.env.DEV) {
-  Object.assign(window, { __cctv: { loadFile, setFms, fmsData, annot, vc } });
+  Object.assign(window, { __cctv: { loadFile, setFms, fmsData, annot, vc, attachments } });
 }

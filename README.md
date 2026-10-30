@@ -27,6 +27,7 @@ npm run build    # ได้ไฟล์ static ใน dist/ (base: './' วา�
 | `src/annotate.ts` | วงรี/กรอบ (พิกัดเป็นพิกเซลของวิดีโอ), editor ลาก-ย้าย-ย่อขยาย-undo |
 | `src/evidence.ts` | วาดภาพหลักฐาน 2160×855 → JPG 0.92 |
 | `src/clip.ts` | อัดคลิป 1280×720 + วง + แถบข้อความ ด้วย MediaRecorder (mp4 ถ้ารองรับ ไม่งั้น webm) |
+| `src/attachments.ts` | รูปประกอบไม่บังคับ (Runsheet / ท้ายรถ / Seal) ใส่ ZIP เป็นไฟล์ต้นฉบับ |
 | `src/files.ts` | ZIP (JSZip), ดาวน์โหลด |
 | `src/time.ts` | แปลงเวลา HH:MM:SS |
 | `src/storage.ts` | เก็บค่าฟอร์มใน localStorage (ไม่เก็บคลิป/ภาพ) |

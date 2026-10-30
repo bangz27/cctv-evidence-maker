@@ -12,7 +12,7 @@
   --warn-bg: #fff6e0;
   --err: #b42318;
   --err-bg: #fdecea;
-  font-family: Sarabun, 'Noto Sans Thai', system-ui, sans-serif;
+  font-family: 'Noto Sans Thai', system-ui, sans-serif;
   color: var(--text);
   background: var(--bg);
 }
@@ -318,6 +318,77 @@ body.busy .btn {
 }
 .time-match.warn {
   color: var(--warn);
+}
+
+.optional {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.attach-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 700px) {
+  .attach-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.attach-slot {
+  border: 1px dashed #c4c9d1;
+  border-radius: 8px;
+  padding: 8px 10px;
+  min-width: 0;
+}
+.attach-slot.over {
+  background: #fff4f1;
+  border-color: var(--orange);
+}
+.attach-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.attach-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 24px;
+}
+.attach-thumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+.attach-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.attach-thumb button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--red);
+  color: #fff;
+  font-size: 12px;
+  line-height: 22px;
+  padding: 0;
+  cursor: pointer;
+}
+.attach-empty {
+  font-size: 13px;
+  color: var(--muted);
 }
 
 .fms-row {

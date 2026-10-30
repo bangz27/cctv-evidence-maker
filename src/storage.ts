@@ -1,12 +1,11 @@
 // Persists only the typed case fields. Video and images are never stored.
-const KEY = 'cctv-evidence-maker:v1';
+const KEY = 'cctv-evidence-maker:v2';
 
 export interface SavedForm {
-  to: string;
+  parcel: string;
   fmsTime: string;
   cctvTime: string;
   dest: string;
-  parcels: string;
 }
 
 export function loadForm(): Partial<SavedForm> {

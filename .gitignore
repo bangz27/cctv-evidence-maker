@@ -2,3 +2,5 @@ node_modules
 dist
 test-media
 test-output
+tutorial/assets
+tutorial-output

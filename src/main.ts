@@ -31,13 +31,13 @@ const useFrameBtn = $<HTMLButtonElement>('useFrameBtn');
 const chosenInfo = $('chosenInfo');
 const annotCard = $('annotCard');
 const toolSeg = $('toolSeg');
-const toInput = $<HTMLInputElement>('toInput');
+const parcelInput = $<HTMLInputElement>('parcelInput');
 const fmsTimeInput = $<HTMLInputElement>('fmsTimeInput');
 const cctvTimeInput = $<HTMLInputElement>('cctvTimeInput');
 const timeMatch = $('timeMatch');
 const destInput = $<HTMLInputElement>('destInput');
-const parcelsInput = $<HTMLTextAreaElement>('parcelsInput');
-const parcelList = $('parcelList');
+const fmsFileInput = $<HTMLInputElement>('fmsFileInput');
+const fmsStatus = $('fmsStatus');
 const fmsEditor = $('fmsEditor');
 const fmsCanvas = $<HTMLCanvasElement>('fmsCanvas');
 const fmsPointInfo = $('fmsPointInfo');
@@ -51,19 +51,19 @@ const evidencePreview = $<HTMLImageElement>('evidencePreview');
 const fileList = $('fileList');
 
 // ---------- state ----------
-interface ParcelData {
+// One case = one parcel: its FMS screenshot, the arrow point on it and the last JPG built.
+interface FmsData {
   fms?: ImageBitmap;
-  fmsName?: string;
   point?: Point; // FMS image pixels
   evidence?: Blob;
 }
 
 const vc = new VideoController(videoEl);
 const annot = new Annotator(overlay);
-const parcels = new Map<string, ParcelData>();
-let activeParcel = '';
+const fmsData: FmsData = {};
 let chosen: { canvas: HTMLCanvasElement; time: number } | null = null;
-let clip: { blob: Blob; format: ClipFormat; stale: boolean } | null = null;
+// parcel = the number written on the clip's text bar when it was recorded.
+let clip: { blob: Blob; format: ClipFormat; parcel: string; stale: boolean } | null = null;
 let previewUrl = '';
 let busy = false;
 
@@ -77,17 +77,9 @@ function showMsg(text: string, kind: 'ok' | 'warn' | 'error' = 'ok'): void {
 }
 
 // ---------- case form ----------
-function parcelIds(): string[] {
-  const ids = parcelsInput.value
-    .split(/[\s,;]+/)
-    .map((s) => s.trim().toUpperCase())
-    .filter(Boolean);
-  return [...new Set(ids)];
-}
-
 function caseData() {
   return {
-    to: toInput.value.trim().toUpperCase(),
+    parcel: parcelInput.value.trim().toUpperCase(),
     fmsTime: normalizeTime(fmsTimeInput.value),
     cctvTime: normalizeTime(cctvTimeInput.value),
     dest: destInput.value.trim().toUpperCase(),
@@ -96,11 +88,10 @@ function caseData() {
 
 function onFormChange(): void {
   saveForm({
-    to: toInput.value,
+    parcel: parcelInput.value,
     fmsTime: fmsTimeInput.value,
     cctvTime: cctvTimeInput.value,
     dest: destInput.value,
-    parcels: parcelsInput.value,
   });
   const { fmsTime, cctvTime } = caseData();
   if (!fmsTime || !cctvTime) {
@@ -113,75 +104,45 @@ function onFormChange(): void {
     timeMatch.className = 'time-match warn';
     timeMatch.textContent = 'เวลาไม่ตรงกัน → ป้ายจะเขียน "(ใกล้เคียง CCTV)"';
   }
-  syncParcels();
 }
 
-function syncParcels(): void {
-  const ids = parcelIds();
-  for (const id of ids) if (!parcels.has(id)) parcels.set(id, {});
-  for (const id of [...parcels.keys()]) if (!ids.includes(id)) parcels.delete(id);
-  if (!parcels.has(activeParcel)) activeParcel = ids[0] ?? '';
-  renderParcels();
-  renderFms();
+// Anything that changes what the JPG would show makes the last one outdated.
+function invalidateEvidence(): void {
+  fmsData.evidence = undefined;
+  renderFmsStatus();
+  renderFiles();
 }
 
-function renderParcels(): void {
-  parcelList.innerHTML = '';
-  if (!parcels.size) {
-    const li = document.createElement('li');
-    li.className = 'empty';
-    li.textContent = 'ยังไม่มีเลขพัสดุ — กรอกในช่อง "เลขพัสดุใน TO นี้"';
-    parcelList.append(li);
-    return;
-  }
-  for (const [id, p] of parcels) {
-    const li = document.createElement('li');
-    li.className = id === activeParcel ? 'active' : '';
-    li.innerHTML = `
-      <span class="pid"></span>
-      <span class="chips">
-        <span class="chip ${p.fms ? 'ok' : ''}">${p.fms ? '✔' : '✖'} FMS</span>
-        <span class="chip ${p.point ? 'ok' : ''}">${p.point ? '✔' : '–'} จุดลูกศร</span>
-        <span class="chip ${p.evidence ? 'ok' : ''}">${p.evidence ? '✔' : '–'} JPG</span>
-      </span>
-      <label class="btn small">เลือกไฟล์<input type="file" accept="image/*" hidden /></label>`;
-    li.querySelector('.pid')!.textContent = id;
-    li.addEventListener('click', () => {
-      if (activeParcel === id) return;
-      activeParcel = id;
-      renderParcels();
-      renderFms();
-    });
-    const input = li.querySelector('input')!;
-    input.addEventListener('click', (e) => e.stopPropagation());
-    input.addEventListener('change', () => {
-      const f = input.files?.[0];
-      if (f) void setFms(id, f);
-    });
-    parcelList.append(li);
-  }
+function renderFmsStatus(): void {
+  const chip = (ok: boolean, okText: string, noText: string) =>
+    `<span class="chip ${ok ? 'ok' : ''}">${ok ? okText : noText}</span>`;
+  fmsStatus.innerHTML =
+    chip(!!fmsData.fms, '✔ FMS', '✖ FMS') +
+    chip(!!fmsData.point, '✔ จุดลูกศร', '– จุดลูกศร') +
+    chip(!!fmsData.evidence, '✔ JPG', '– JPG');
 }
 
-async function setFms(id: string, blob: Blob, name = 'clipboard'): Promise<void> {
-  const p = parcels.get(id);
-  if (!p) return;
+async function setFms(blob: Blob): Promise<void> {
   try {
-    p.fms = await createImageBitmap(blob);
+    fmsData.fms = await createImageBitmap(blob);
   } catch {
     showMsg('อ่านไฟล์ภาพ FMS ไม่ได้', 'error');
     return;
   }
-  p.fmsName = blob instanceof File ? blob.name : name;
-  p.point = undefined;
-  p.evidence = undefined;
-  activeParcel = id;
-  renderParcels();
+  fmsData.point = undefined;
+  invalidateEvidence();
   renderFms();
 }
 
+fmsFileInput.addEventListener('change', () => {
+  const f = fmsFileInput.files?.[0];
+  if (f) void setFms(f);
+  fmsFileInput.value = '';
+});
+
 function renderFms(): void {
-  const p = parcels.get(activeParcel);
-  if (!p?.fms) {
+  const p = fmsData;
+  if (!p.fms) {
     fmsEditor.hidden = true;
     return;
   }
@@ -201,20 +162,18 @@ function renderFms(): void {
     ctx.stroke();
   }
   fmsPointInfo.textContent = p.point
-    ? `${activeParcel}: ✔ ตั้งจุดลูกศรแล้ว (คลิกใหม่เพื่อย้าย)`
-    : `${activeParcel}: คลิกบนภาพตรงบรรทัด FMHub_LHPacking เพื่อกำหนดจุดที่ลูกศรชี้`;
+    ? '✔ ตั้งจุดลูกศรแล้ว (คลิกใหม่เพื่อย้าย)'
+    : 'คลิกบนภาพตรงบรรทัด FMHub_LHPacking เพื่อกำหนดจุดที่ลูกศรชี้';
 }
 
 fmsCanvas.addEventListener('click', (e) => {
-  const p = parcels.get(activeParcel);
-  if (!p?.fms) return;
+  if (!fmsData.fms) return;
   const r = fmsCanvas.getBoundingClientRect();
-  p.point = {
+  fmsData.point = {
     x: ((e.clientX - r.left) * fmsCanvas.width) / r.width,
     y: ((e.clientY - r.top) * fmsCanvas.height) / r.height,
   };
-  p.evidence = undefined;
-  renderParcels();
+  invalidateEvidence();
   renderFms();
 });
 
@@ -223,11 +182,7 @@ document.addEventListener('paste', (e) => {
   const blob = item?.getAsFile();
   if (!blob) return;
   e.preventDefault();
-  if (!activeParcel) {
-    showMsg('กรอกเลขพัสดุก่อน แล้วค่อยวางภาพ FMS', 'warn');
-    return;
-  }
-  void setFms(activeParcel, blob);
+  void setFms(blob);
 });
 
 // ---------- video ----------
@@ -259,10 +214,8 @@ async function loadFile(file: File): Promise<void> {
   clip = null;
   clipStart.value = '';
   clipEnd.value = '';
-  for (const p of parcels.values()) p.evidence = undefined;
-  renderParcels();
   renderChosen();
-  renderFiles();
+  invalidateEvidence();
   updateTime();
 }
 
@@ -354,9 +307,8 @@ useFrameBtn.addEventListener('click', async () => {
   chosen = { canvas: vc.captureFrame(), time: videoEl.currentTime };
   if (!clipStart.value) clipStart.value = Math.max(0, chosen.time - 10).toFixed(1);
   if (!clipEnd.value) clipEnd.value = Math.min(vc.duration, chosen.time + 10).toFixed(1);
-  for (const p of parcels.values()) p.evidence = undefined;
   renderChosen();
-  renderParcels();
+  invalidateEvidence();
 });
 
 document.addEventListener('keydown', (e) => {
@@ -382,10 +334,8 @@ annot.onToolChange = (tool: Tool) => {
   overlay.style.cursor = tool === 'select' ? 'default' : 'crosshair';
 };
 annot.onChange = () => {
-  for (const p of parcels.values()) p.evidence = undefined;
   if (clip) clip.stale = true;
-  renderParcels();
-  renderFiles();
+  invalidateEvidence();
 };
 toolSeg.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach((b) => b.addEventListener('click', () => annot.setTool(b.dataset.tool as Tool)));
 $('deleteShapeBtn').addEventListener('click', () => annot.deleteSelected());
@@ -397,37 +347,35 @@ function baseErrors(): string[] {
   const c = caseData();
   const errs: string[] = [];
   if (!chosen) errs.push('ยังไม่ได้เลือกเฟรม CCTV (กด "ใช้เฟรมนี้")');
-  if (!c.to) errs.push('ยังไม่ได้กรอก TO number');
+  if (!c.parcel) errs.push('ยังไม่ได้กรอกเลขพัสดุ');
   if (!c.fmsTime) errs.push('เวลา FMHub_LHPacking ไม่ถูกต้อง (HH:MM:SS)');
   if (!c.cctvTime) errs.push('ยังไม่ได้กรอกเวลา CCTV ที่อ่านจากมุมจอ (HH:MM:SS)');
+  if (!fmsData.fms) errs.push('ยังไม่มีภาพ FMS (กด Ctrl+V หรือเลือกไฟล์)');
   return errs;
 }
 
-async function makeEvidence(id: string): Promise<Blob> {
-  const p = parcels.get(id)!;
+async function makeEvidence(): Promise<Blob> {
   const c = caseData();
   await ensureFonts();
   const canvas = renderEvidence({
-    parcel: id,
-    to: c.to,
+    parcel: c.parcel,
     cctvTime: c.cctvTime!,
     fmsTime: c.fmsTime!,
     frame: chosen!.canvas,
     shapes: annot.shapes,
-    fms: p.fms!,
-    point: p.point,
+    fms: fmsData.fms!,
+    point: fmsData.point,
   });
-  p.evidence = await toJpeg(canvas);
+  fmsData.evidence = await toJpeg(canvas);
   if (previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl = URL.createObjectURL(p.evidence);
+  previewUrl = URL.createObjectURL(fmsData.evidence);
   evidencePreview.src = previewUrl;
   evidencePreview.hidden = false;
-  return p.evidence;
+  return fmsData.evidence;
 }
 
-function noPointNote(ids: string[]): string {
-  const missing = ids.filter((id) => !parcels.get(id)?.point);
-  return missing.length ? ` · ไม่มีลูกศร (ยังไม่ได้คลิกจุด): ${missing.join(', ')}` : '';
+function noPointNote(): string {
+  return fmsData.point ? '' : 'ไม่มีลูกศร (ยังไม่ได้คลิกจุดบนภาพ FMS)';
 }
 
 async function guarded(fn: () => Promise<void>): Promise<void> {
@@ -447,33 +395,14 @@ async function guarded(fn: () => Promise<void>): Promise<void> {
 $('makeOneBtn').addEventListener('click', () =>
   guarded(async () => {
     const errs = baseErrors();
-    if (!activeParcel) errs.push('ยังไม่มีเลขพัสดุ');
-    else if (!parcels.get(activeParcel)?.fms) errs.push(`${activeParcel} ยังไม่มีภาพ FMS`);
     if (errs.length) return showMsg(errs.join('\n'), 'error');
-    const blob = await makeEvidence(activeParcel);
-    download(blob, `${activeParcel}_Evidence.jpg`);
-    renderParcels();
+    const { parcel } = caseData();
+    const blob = await makeEvidence();
+    download(blob, `${parcel}_Evidence.jpg`);
+    renderFmsStatus();
     renderFiles();
-    showMsg(`สร้าง ${activeParcel}_Evidence.jpg แล้ว (${formatBytes(blob.size)})${noPointNote([activeParcel])}`, noPointNote([activeParcel]) ? 'warn' : 'ok');
-  }),
-);
-
-$('makeAllBtn').addEventListener('click', () =>
-  guarded(async () => {
-    const errs = baseErrors();
-    const ready = [...parcels.keys()].filter((id) => parcels.get(id)!.fms);
-    const missing = [...parcels.keys()].filter((id) => !parcels.get(id)!.fms);
-    if (!ready.length) errs.push('ยังไม่มีเลขพัสดุที่มีภาพ FMS');
-    if (errs.length) return showMsg(errs.join('\n'), 'error');
-    for (const id of ready) {
-      const blob = await makeEvidence(id);
-      download(blob, `${id}_Evidence.jpg`);
-      await new Promise((r) => setTimeout(r, 300)); // Chrome drops rapid back-to-back downloads
-    }
-    renderParcels();
-    renderFiles();
-    const notes = (missing.length ? ` · ข้าม (ไม่มีภาพ FMS): ${missing.join(', ')}` : '') + noPointNote(ready);
-    showMsg(`สร้างภาพหลักฐาน ${ready.length} ไฟล์แล้ว${notes}`, notes ? 'warn' : 'ok');
+    const note = noPointNote();
+    showMsg(`สร้าง ${parcel}_Evidence.jpg แล้ว (${formatBytes(blob.size)})${note ? ' · ' + note : ''}`, note ? 'warn' : 'ok');
   }),
 );
 
@@ -486,7 +415,7 @@ recordBtn.addEventListener('click', () =>
     const c = caseData();
     const errs: string[] = [];
     if (!vc.width) errs.push('ยังไม่ได้เปิดคลิป');
-    if (!c.to) errs.push('ยังไม่ได้กรอก TO number');
+    if (!c.parcel) errs.push('ยังไม่ได้กรอกเลขพัสดุ');
     if (!c.fmsTime) errs.push('เวลา FMHub_LHPacking ไม่ถูกต้อง (HH:MM:SS)');
     if (!c.dest) errs.push('ยังไม่ได้กรอกปลายทาง');
     const start = Number(clipStart.value);
@@ -504,10 +433,10 @@ recordBtn.addEventListener('click', () =>
         start,
         end,
         shapes: annot.shapes,
-        barText: `${c.to} | LHPacking ${c.fmsTime} | ยิงขึ้นรถ Shuttle ไป ${c.dest}`,
+        barText: `${c.parcel} | LHPacking ${c.fmsTime} | ยิงขึ้นรถ Shuttle ไป ${c.dest}`,
         onProgress: (f) => (recordProgress.value = f),
       });
-      clip = { ...res, stale: false };
+      clip = { ...res, parcel: c.parcel, stale: false };
     } finally {
       recordBtn.textContent = '● อัดคลิป 1280×720';
       recordProgress.hidden = true;
@@ -535,10 +464,11 @@ function renderFiles(): void {
     li.append(span, btn);
     fileList.append(li);
   };
-  for (const [id, p] of parcels) if (p.evidence) add(`${id}_Evidence.jpg`, p.evidence);
+  const { parcel } = caseData();
+  if (fmsData.evidence) add(`${parcel}_Evidence.jpg`, fmsData.evidence);
   if (clip) {
     const note = clip.stale ? ' · ⚠ แก้วงหลังอัด อัดใหม่ถ้าต้องการ' : '';
-    for (const id of parcels.keys()) add(`CCTV_${id}.${clip.format.ext}`, clip.blob, note);
+    add(`CCTV_${clip.parcel}.${clip.format.ext}`, clip.blob, note);
   }
   if (fileList.childElementCount) resultCard.hidden = false;
 }
@@ -546,40 +476,37 @@ function renderFiles(): void {
 $('zipBtn').addEventListener('click', () =>
   guarded(async () => {
     const errs = baseErrors();
-    const ready = [...parcels.keys()].filter((id) => parcels.get(id)!.fms);
-    const missing = [...parcels.keys()].filter((id) => !parcels.get(id)!.fms);
-    if (!ready.length) errs.push('ยังไม่มีเลขพัสดุที่มีภาพ FMS');
     if (errs.length) return showMsg(errs.join('\n'), 'error');
-    const files: OutFile[] = [];
-    for (const id of ready) {
-      // Always rebuild so the ZIP matches the current frame, shapes and form.
-      files.push({ path: `${id}/${id}_Evidence.jpg`, blob: await makeEvidence(id) });
-      if (clip) files.push({ path: `${id}/CCTV_${id}.${clip.format.ext}`, blob: clip.blob });
-    }
+    const { parcel } = caseData();
+    // Always rebuild so the ZIP matches the current frame, shapes and form.
+    const files: OutFile[] = [{ path: `${parcel}/${parcel}_Evidence.jpg`, blob: await makeEvidence() }];
+    if (clip) files.push({ path: `${parcel}/CCTV_${parcel}.${clip.format.ext}`, blob: clip.blob });
     const zip = await buildZip(files);
-    download(zip, `${caseData().to}_Evidence.zip`);
-    renderParcels();
+    download(zip, `${parcel}_Evidence.zip`);
+    renderFmsStatus();
     renderFiles();
     const notes = [
-      missing.length ? `ข้าม (ไม่มีภาพ FMS): ${missing.join(', ')}` : '',
       clip ? '' : 'ยังไม่ได้อัดคลิป — ZIP มีแต่ภาพ',
-      noPointNote(ready).replace(' · ', ''),
+      clip && clip.parcel !== parcel ? `คลิปอัดไว้ตอนเลขพัสดุเป็น ${clip.parcel} — อัดใหม่ให้แถบข้อความตรง` : '',
+      noPointNote(),
     ].filter(Boolean);
-    showMsg(`ZIP ${formatBytes(zip.size)} · ${ready.length} เลขพัสดุ${notes.length ? '\n' + notes.join('\n') : ''}`, notes.length ? 'warn' : 'ok');
+    showMsg(`ZIP ${formatBytes(zip.size)} · ${parcel}${notes.length ? '\n' + notes.join('\n') : ''}`, notes.length ? 'warn' : 'ok');
   }),
 );
 
 // ---------- init ----------
 const saved = loadForm();
-toInput.value = saved.to ?? '';
+parcelInput.value = saved.parcel ?? '';
 fmsTimeInput.value = saved.fmsTime ?? '';
 cctvTimeInput.value = saved.cctvTime ?? '';
 destInput.value = saved.dest ?? '';
-parcelsInput.value = saved.parcels ?? '';
-for (const el of [toInput, fmsTimeInput, cctvTimeInput, destInput, parcelsInput]) el.addEventListener('input', onFormChange);
+for (const el of [parcelInput, fmsTimeInput, cctvTimeInput, destInput]) el.addEventListener('input', onFormChange);
+// A different parcel number changes the JPG header and file names.
+parcelInput.addEventListener('input', invalidateEvidence);
 onFormChange();
 renderChosen();
+renderFmsStatus();
 
 if (import.meta.env.DEV) {
-  Object.assign(window, { __cctv: { loadFile, setFms, parcels, annot, vc } });
+  Object.assign(window, { __cctv: { loadFile, setFms, fmsData, annot, vc } });
 }

@@ -23,7 +23,6 @@ export interface Point {
 
 export interface EvidenceInput {
   parcel: string;
-  to: string;
   cctvTime: string; // HH:MM:SS read by the user from the CCTV clock
   fmsTime: string; // HH:MM:SS of FMHub_LHPacking
   frame: CanvasImageSource & { width: number; height: number };
@@ -36,8 +35,8 @@ export async function ensureFonts(): Promise<void> {
   await Promise.all([document.fonts.load(`700 38px ${FONT}`, 'หลักฐาน'), document.fonts.load(`400 20px ${FONT}`, 'หลักฐาน')]);
 }
 
-export function headerText(parcel: string, to: string): string {
-  return `หลักฐาน CCTV | ${parcel} | ${to} | ยิงขึ้นรถ Shuttle แล้ว`;
+export function headerText(parcel: string): string {
+  return `หลักฐาน CCTV | ${parcel} | ยิงขึ้นรถ Shuttle แล้ว`;
 }
 
 export function renderEvidence(inp: EvidenceInput): HTMLCanvasElement {
@@ -53,8 +52,8 @@ export function renderEvidence(inp: EvidenceInput): HTMLCanvasElement {
   ctx.fillRect(0, 0, W, HEADER_H);
   ctx.fillStyle = '#fff';
   ctx.textBaseline = 'middle';
-  fitText(ctx, headerText(inp.parcel, inp.to), 38, W - PAD * 2);
-  ctx.fillText(headerText(inp.parcel, inp.to), PAD, HEADER_H / 2 + 2);
+  fitText(ctx, headerText(inp.parcel), 38, W - PAD * 2);
+  ctx.fillText(headerText(inp.parcel), PAD, HEADER_H / 2 + 2);
 
   // Left: CCTV frame + annotations, fitted into 1200 x 675 (top-left aligned)
   const fs = Math.min(LEFT_W / inp.frame.width, IMG_H / inp.frame.height);

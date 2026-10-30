@@ -70,9 +70,12 @@
 
         <!-- 4. ภาพ FMS -->
         <div class="card">
-          <h2>4. ภาพ FMS ต่อเลขพัสดุ</h2>
-          <p class="hint">เลือกเลขพัสดุ แล้วกด <kbd>Ctrl</kbd>+<kbd>V</kbd> วางภาพแคป หรือกด "เลือกไฟล์" · จากนั้นคลิกบนภาพตรงบรรทัด FMHub_LHPacking เพื่อให้ลูกศรชี้</p>
-          <ul class="parcel-list" id="parcelList"></ul>
+          <h2>4. ภาพ FMS</h2>
+          <p class="hint">กด <kbd>Ctrl</kbd>+<kbd>V</kbd> วางภาพแคปหน้า FMS ของเลขพัสดุนี้ หรือกด "เลือกไฟล์" · จากนั้นคลิกบนภาพตรงบรรทัด FMHub_LHPacking เพื่อให้ลูกศรชี้</p>
+          <div class="fms-row">
+            <label class="btn small">เลือกไฟล์ภาพ FMS<input type="file" accept="image/*" id="fmsFileInput" hidden /></label>
+            <span class="chips" id="fmsStatus"></span>
+          </div>
           <div class="fms-editor" id="fmsEditor" hidden>
             <div class="hint" id="fmsPointInfo"></div>
             <canvas id="fmsCanvas"></canvas>
@@ -93,8 +96,8 @@
         <div class="card">
           <h2>3. ข้อมูลเคส</h2>
           <div class="field">
-            <label for="toInput">TO number</label>
-            <input id="toInput" placeholder="TO20260920CM2W7" autocomplete="off" />
+            <label for="parcelInput">เลขพัสดุ</label>
+            <input id="parcelInput" placeholder="TH2699586897989" autocomplete="off" />
           </div>
           <div class="grid2">
             <div class="field">
@@ -116,20 +119,15 @@
               <option value="SOCW"></option>
             </datalist>
           </div>
-          <div class="field">
-            <label for="parcelsInput">เลขพัสดุใน TO นี้ (บรรทัดละเลข)</label>
-            <textarea id="parcelsInput" rows="4" placeholder="TH2699586897989"></textarea>
-          </div>
         </div>
 
         <!-- 5. Export -->
         <div class="card">
           <h2>5. สร้างหลักฐาน</h2>
           <div class="btn-col">
-            <button class="btn primary" id="makeOneBtn">สร้างภาพหลักฐาน (เลขที่เลือก)</button>
-            <button class="btn" id="makeAllBtn">สร้างทุกเลขใน TO นี้</button>
+            <button class="btn primary" id="makeOneBtn">สร้างภาพหลักฐาน</button>
           </div>
-          <h3>คลิปที่มีวง (ต่อ TO)</h3>
+          <h3>คลิปที่มีวง (ต่อ เลขพัสดุ)</h3>
           <div class="grid2">
             <div class="field">
               <label for="clipStart">เริ่ม (วินาทีในคลิป)</label>

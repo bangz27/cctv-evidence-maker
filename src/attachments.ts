@@ -4,7 +4,7 @@ import type { OutFile } from './files';
 interface Slot {
   key: string;
   label: string;
-  fileTag: string; // used in the file name: {parcel}_{fileTag}.jpg
+  fileTag: string; // used in the file name: {LT}_{fileTag}.jpg
 }
 
 export const SLOTS: Slot[] = [
@@ -52,14 +52,16 @@ export class Attachments {
     this.changed();
   }
 
-  // {parcel}/{parcel}_Seal.jpg, or _Seal_1.jpg, _Seal_2.jpg ... when a slot has several.
-  zipEntries(parcel: string): OutFile[] {
+  // {folder}/{name}_Seal.jpg, or _Seal_1.jpg, _Seal_2.jpg ... when a slot has several.
+  // name is the LT number; without one the file is just Seal.jpg.
+  zipEntries(folder: string, name: string): OutFile[] {
     const out: OutFile[] = [];
+    const prefix = name ? `${name}_` : '';
     for (const slot of SLOTS) {
       const list = this.items.get(slot.key)!;
       list.forEach(({ file }, i) => {
         const n = list.length > 1 ? `_${i + 1}` : '';
-        out.push({ path: `${parcel}/${parcel}_${slot.fileTag}${n}.${extOf(file)}`, blob: file });
+        out.push({ path: `${folder}/${prefix}${slot.fileTag}${n}.${extOf(file)}`, blob: file });
       });
     }
     return out;

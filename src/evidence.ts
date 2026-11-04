@@ -21,13 +21,14 @@ export interface Point {
   y: number;
 }
 
+// Every field is optional: whatever is missing is left out (or shown as an empty box), never filled in.
 export interface EvidenceInput {
-  parcel: string;
-  cctvTime: string; // HH:MM:SS read by the user from the CCTV clock
-  fmsTime: string; // HH:MM:SS of FMHub_LHPacking
-  frame: CanvasImageSource & { width: number; height: number };
+  parcel?: string;
+  cctvTime?: string | null; // HH:MM:SS read by the user from the CCTV clock
+  fmsTime?: string | null; // HH:MM:SS of FMHub_LHPacking
+  frame?: CanvasImageSource & { width: number; height: number };
   shapes: Shape[];
-  fms: ImageBitmap;
+  fms?: ImageBitmap;
   point?: Point; // in FMS image pixels
 }
 
@@ -35,8 +36,8 @@ export async function ensureFonts(): Promise<void> {
   await Promise.all([document.fonts.load(`700 38px ${FONT}`, 'หลักฐาน'), document.fonts.load(`400 20px ${FONT}`, 'หลักฐาน')]);
 }
 
-export function headerText(parcel: string): string {
-  return `หลักฐาน CCTV | ${parcel} | ยิงขึ้นรถ Shuttle แล้ว`;
+export function headerText(parcel?: string): string {
+  return ['หลักฐาน CCTV', parcel, 'ยิงขึ้นรถ Shuttle แล้ว'].filter(Boolean).join(' | ');
 }
 
 export function renderEvidence(inp: EvidenceInput): HTMLCanvasElement {
@@ -56,36 +57,45 @@ export function renderEvidence(inp: EvidenceInput): HTMLCanvasElement {
   ctx.fillText(headerText(inp.parcel), PAD, HEADER_H / 2 + 2);
 
   // Left: CCTV frame + annotations, fitted into 1200 x 675 (top-left aligned)
-  const fs = Math.min(LEFT_W / inp.frame.width, IMG_H / inp.frame.height);
-  const fw = inp.frame.width * fs;
-  const fh = inp.frame.height * fs;
-  ctx.save();
-  ctx.translate(PAD, IMG_TOP);
-  ctx.beginPath();
-  ctx.rect(0, 0, fw, fh);
-  ctx.clip();
-  ctx.drawImage(inp.frame, 0, 0, fw, fh);
-  ctx.scale(fs, fs);
-  drawShapes(ctx, inp.shapes, inp.frame.height);
-  ctx.restore();
+  if (inp.frame) {
+    const fs = Math.min(LEFT_W / inp.frame.width, IMG_H / inp.frame.height);
+    const fw = inp.frame.width * fs;
+    const fh = inp.frame.height * fs;
+    ctx.save();
+    ctx.translate(PAD, IMG_TOP);
+    ctx.beginPath();
+    ctx.rect(0, 0, fw, fh);
+    ctx.clip();
+    ctx.drawImage(inp.frame, 0, 0, fw, fh);
+    ctx.scale(fs, fs);
+    drawShapes(ctx, inp.shapes, inp.frame.height);
+    ctx.restore();
+  } else {
+    emptyBox(ctx, PAD, IMG_TOP, LEFT_W, IMG_H, 'ไม่มีภาพ CCTV');
+  }
 
   // Right: FMS screenshot fitted into 900 x 675 (top-left aligned)
-  const ms = Math.min(RIGHT_W / inp.fms.width, IMG_H / inp.fms.height);
-  const mw = inp.fms.width * ms;
-  const mh = inp.fms.height * ms;
-  ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(inp.fms, RIGHT_X, IMG_TOP, mw, mh);
-  ctx.strokeStyle = '#d0d0d0';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(RIGHT_X + 0.5, IMG_TOP + 0.5, mw - 1, mh - 1);
+  let ms = 0;
+  if (inp.fms) {
+    ms = Math.min(RIGHT_W / inp.fms.width, IMG_H / inp.fms.height);
+    const mw = inp.fms.width * ms;
+    const mh = inp.fms.height * ms;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(inp.fms, RIGHT_X, IMG_TOP, mw, mh);
+    ctx.strokeStyle = '#d0d0d0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(RIGHT_X + 0.5, IMG_TOP + 0.5, mw - 1, mh - 1);
+  } else {
+    emptyBox(ctx, RIGHT_X, IMG_TOP, RIGHT_W, IMG_H, 'ไม่มีภาพ FMS');
+  }
 
-  // Labels
-  const match = inp.cctvTime === inp.fmsTime ? 'ตรงกับ CCTV' : 'ใกล้เคียง CCTV';
-  label(ctx, `CCTV ${inp.cctvTime} ยิงพัสดุขึ้นรถ Shuttle`, PAD, LEFT_W);
-  const fmsLabelW = label(ctx, `FMS FMHub_LHPacking ${inp.fmsTime} (${match})`, RIGHT_X, RIGHT_W);
+  // Labels: a missing time is left out; the match note needs both times.
+  const match = inp.cctvTime && inp.fmsTime ? (inp.cctvTime === inp.fmsTime ? ' (ตรงกับ CCTV)' : ' (ใกล้เคียง CCTV)') : '';
+  label(ctx, ['CCTV', inp.cctvTime, 'ยิงพัสดุขึ้นรถ Shuttle'].filter(Boolean).join(' '), PAD, LEFT_W);
+  const fmsLabelW = label(ctx, ['FMS FMHub_LHPacking', inp.fmsTime].filter(Boolean).join(' ') + match, RIGHT_X, RIGHT_W);
 
   // Arrow from the FMS label up to the clicked LHPacking row
-  if (inp.point) {
+  if (inp.fms && inp.point) {
     const tx = RIGHT_X + inp.point.x * ms;
     const ty = IMG_TOP + inp.point.y * ms;
     arrow(ctx, RIGHT_X + fmsLabelW * 0.6, LABEL_Y, tx, ty);
@@ -97,6 +107,22 @@ export function toJpeg(c: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) =>
     c.toBlob((b) => (b ? resolve(b) : reject(new Error('สร้าง JPG ไม่สำเร็จ'))), 'image/jpeg', 0.92),
   );
+}
+
+function emptyBox(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, text: string): void {
+  ctx.save();
+  ctx.fillStyle = '#f4f5f7';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = '#c9ced6';
+  ctx.setLineDash([12, 8]);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.fillStyle = '#98a2b3';
+  ctx.font = `700 32px ${FONT}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + w / 2, y + h / 2);
+  ctx.restore();
 }
 
 function fitText(ctx: CanvasRenderingContext2D, text: string, size: number, maxW: number): void {

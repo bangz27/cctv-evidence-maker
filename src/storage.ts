@@ -6,6 +6,7 @@ export interface SavedForm {
   fmsTime: string;
   cctvTime: string;
   dest: string;
+  lt: string;
 }
 
 export function loadForm(): Partial<SavedForm> {

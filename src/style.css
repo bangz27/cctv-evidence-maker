@@ -326,6 +326,10 @@ body.busy .btn {
   color: var(--muted);
 }
 
+.lt-field {
+  max-width: 360px;
+}
+
 .attach-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

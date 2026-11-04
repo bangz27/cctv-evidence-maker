@@ -84,8 +84,12 @@
 
         <!-- 5. รูปประกอบ -->
         <div class="card">
-          <h2>5. รูปประกอบ <span class="optional">(ไม่บังคับ)</span></h2>
-          <p class="hint">แนบได้หลายรูปต่อหัวข้อ · กด "+ เพิ่มรูป" หรือลากรูปมาวางที่ช่อง · รูปจะถูกใส่ใน ZIP เป็นไฟล์ต้นฉบับ ไม่ถูกบีบอัดหรือแก้ไข</p>
+          <h2>5. แนบหลักฐาน LT <span class="optional">(SOC_LHArrived, FMHub_LHTransported)</span></h2>
+          <div class="field lt-field">
+            <label for="ltInput">เลข LT</label>
+            <input id="ltInput" placeholder="LT0Q9K29ENK1" autocomplete="off" />
+          </div>
+          <p class="hint">รูปในส่วนนี้จะตั้งชื่อไฟล์ตามเลข LT เช่น <code>LT…_Runsheet.jpg</code> · แนบได้หลายรูปต่อหัวข้อ · กด "+ เพิ่มรูป" หรือลากรูปมาวางที่ช่อง · รูปจะถูกใส่ใน ZIP เป็นไฟล์ต้นฉบับ ไม่ถูกบีบอัดหรือแก้ไข</p>
           <div class="attach-grid" id="attachGrid"></div>
         </div>
 

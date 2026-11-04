@@ -40,6 +40,7 @@ const fmsTimeInput = $<HTMLInputElement>('fmsTimeInput');
 const cctvTimeInput = $<HTMLInputElement>('cctvTimeInput');
 const timeMatch = $('timeMatch');
 const destInput = $<HTMLInputElement>('destInput');
+const ltInput = $<HTMLInputElement>('ltInput');
 const fmsFileInput = $<HTMLInputElement>('fmsFileInput');
 const fmsStatus = $('fmsStatus');
 const fmsEditor = $('fmsEditor');
@@ -88,6 +89,7 @@ function caseData() {
     fmsTime: normalizeTime(fmsTimeInput.value),
     cctvTime: normalizeTime(cctvTimeInput.value),
     dest: destInput.value.trim().toUpperCase(),
+    lt: ltInput.value.trim().toUpperCase(),
   };
 }
 
@@ -97,6 +99,7 @@ function onFormChange(): void {
     fmsTime: fmsTimeInput.value,
     cctvTime: cctvTimeInput.value,
     dest: destInput.value,
+    lt: ltInput.value,
   });
   const { fmsTime, cctvTime } = caseData();
   if (!fmsTime || !cctvTime) {
@@ -348,15 +351,37 @@ $('undoBtn').addEventListener('click', () => annot.undo());
 $('resetBtn').addEventListener('click', () => annot.reset());
 
 // ---------- evidence ----------
-function baseErrors(): string[] {
+// Nothing is required. Missing pieces are listed as notes; they never block an export.
+function missingNotes(): string[] {
   const c = caseData();
-  const errs: string[] = [];
-  if (!chosen) errs.push('ยังไม่ได้เลือกเฟรม CCTV (กด "ใช้เฟรมนี้")');
-  if (!c.parcel) errs.push('ยังไม่ได้กรอกเลขพัสดุ');
-  if (!c.fmsTime) errs.push('เวลา FMHub_LHPacking ไม่ถูกต้อง (HH:MM:SS)');
-  if (!c.cctvTime) errs.push('ยังไม่ได้กรอกเวลา CCTV ที่อ่านจากมุมจอ (HH:MM:SS)');
-  if (!fmsData.fms) errs.push('ยังไม่มีภาพ FMS (กด Ctrl+V หรือเลือกไฟล์)');
-  return errs;
+  const notes: string[] = [];
+  if (!chosen) notes.push('ไม่มีภาพ CCTV (ยังไม่ได้กด "ใช้เฟรมนี้")');
+  if (!fmsData.fms) notes.push('ไม่มีภาพ FMS');
+  else if (!fmsData.point) notes.push('ไม่มีลูกศร (ยังไม่ได้คลิกจุดบนภาพ FMS)');
+  if (!c.parcel) notes.push('ไม่ได้กรอกเลขพัสดุ');
+  if (fmsTimeInput.value.trim() && !c.fmsTime) notes.push('เวลา FMHub_LHPacking รูปแบบไม่ถูกต้อง จึงไม่ได้ใส่ในภาพ');
+  if (cctvTimeInput.value.trim() && !c.cctvTime) notes.push('เวลา CCTV รูปแบบไม่ถูกต้อง จึงไม่ได้ใส่ในภาพ');
+  return notes;
+}
+
+// The JPG needs at least one of its two pictures.
+const canMakeEvidence = () => !!chosen || !!fmsData.fms;
+
+// File names follow the parcel number when there is one; LT photos follow the LT number.
+function names() {
+  const { parcel, lt } = caseData();
+  const folder = parcel || lt || 'Evidence';
+  return {
+    folder,
+    lt,
+    jpg: parcel ? `${parcel}_Evidence.jpg` : 'Evidence.jpg',
+    clip: (ext: string, p = parcel) => (p ? `CCTV_${p}.${ext}` : `CCTV.${ext}`),
+    zip: folder === 'Evidence' ? 'Evidence.zip' : `${folder}_Evidence.zip`,
+  };
+}
+
+function withNotes(head: string, notes: string[]): [string, 'ok' | 'warn'] {
+  return notes.length ? [`${head}\n${notes.join('\n')}`, 'warn'] : [head, 'ok'];
 }
 
 async function makeEvidence(): Promise<Blob> {
@@ -364,11 +389,11 @@ async function makeEvidence(): Promise<Blob> {
   await ensureFonts();
   const canvas = renderEvidence({
     parcel: c.parcel,
-    cctvTime: c.cctvTime!,
-    fmsTime: c.fmsTime!,
-    frame: chosen!.canvas,
+    cctvTime: c.cctvTime,
+    fmsTime: c.fmsTime,
+    frame: chosen?.canvas,
     shapes: annot.shapes,
-    fms: fmsData.fms!,
+    fms: fmsData.fms,
     point: fmsData.point,
   });
   fmsData.evidence = await toJpeg(canvas);
@@ -377,10 +402,6 @@ async function makeEvidence(): Promise<Blob> {
   evidencePreview.src = previewUrl;
   evidencePreview.hidden = false;
   return fmsData.evidence;
-}
-
-function noPointNote(): string {
-  return fmsData.point ? '' : 'ไม่มีลูกศร (ยังไม่ได้คลิกจุดบนภาพ FMS)';
 }
 
 async function guarded(fn: () => Promise<void>): Promise<void> {
@@ -399,15 +420,13 @@ async function guarded(fn: () => Promise<void>): Promise<void> {
 
 $('makeOneBtn').addEventListener('click', () =>
   guarded(async () => {
-    const errs = baseErrors();
-    if (errs.length) return showMsg(errs.join('\n'), 'error');
-    const { parcel } = caseData();
+    if (!canMakeEvidence()) return showMsg('ยังไม่มีภาพ CCTV หรือภาพ FMS ให้ทำภาพหลักฐาน', 'warn');
+    const { jpg } = names();
     const blob = await makeEvidence();
-    download(blob, `${parcel}_Evidence.jpg`);
+    download(blob, jpg);
     renderFmsStatus();
     renderFiles();
-    const note = noPointNote();
-    showMsg(`สร้าง ${parcel}_Evidence.jpg แล้ว (${formatBytes(blob.size)})${note ? ' · ' + note : ''}`, note ? 'warn' : 'ok');
+    showMsg(...withNotes(`สร้าง ${jpg} แล้ว (${formatBytes(blob.size)})`, missingNotes()));
   }),
 );
 
@@ -418,16 +437,21 @@ $('clipEndNow').addEventListener('click', () => (clipEnd.value = videoEl.current
 recordBtn.addEventListener('click', () =>
   guarded(async () => {
     const c = caseData();
+    // A clip still needs a video and a range to record; the text fields are optional.
     const errs: string[] = [];
     if (!vc.width) errs.push('ยังไม่ได้เปิดคลิป');
-    if (!c.parcel) errs.push('ยังไม่ได้กรอกเลขพัสดุ');
-    if (!c.fmsTime) errs.push('เวลา FMHub_LHPacking ไม่ถูกต้อง (HH:MM:SS)');
-    if (!c.dest) errs.push('ยังไม่ได้กรอกปลายทาง');
     const start = Number(clipStart.value);
     const end = Math.min(Number(clipEnd.value), vc.duration);
-    if (!(clipStart.value && clipEnd.value && end > start)) errs.push('ช่วงคลิปไม่ถูกต้อง (จบต้องมากกว่าเริ่ม)');
+    if (vc.width && !(clipStart.value && clipEnd.value && end > start)) errs.push('ช่วงคลิปไม่ถูกต้อง (จบต้องมากกว่าเริ่ม)');
     if (errs.length) return showMsg(errs.join('\n'), 'error');
 
+    const barText = [
+      c.parcel,
+      c.fmsTime && `LHPacking ${c.fmsTime}`,
+      c.dest ? `ยิงขึ้นรถ Shuttle ไป ${c.dest}` : 'ยิงขึ้นรถ Shuttle',
+    ]
+      .filter(Boolean)
+      .join(' | ');
     const back = videoEl.currentTime;
     recordBtn.textContent = '● กำลังอัด...';
     recordProgress.hidden = false;
@@ -438,7 +462,7 @@ recordBtn.addEventListener('click', () =>
         start,
         end,
         shapes: annot.shapes,
-        barText: `${c.parcel} | LHPacking ${c.fmsTime} | ยิงขึ้นรถ Shuttle ไป ${c.dest}`,
+        barText,
         onProgress: (f) => (recordProgress.value = f),
       });
       clip = { ...res, parcel: c.parcel, stale: false };
@@ -469,35 +493,37 @@ function renderFiles(): void {
     li.append(span, btn);
     fileList.append(li);
   };
-  const { parcel } = caseData();
-  if (fmsData.evidence) add(`${parcel}_Evidence.jpg`, fmsData.evidence);
+  const n = names();
+  if (fmsData.evidence) add(n.jpg, fmsData.evidence);
   if (clip) {
     const note = clip.stale ? ' · ⚠ แก้วงหลังอัด อัดใหม่ถ้าต้องการ' : '';
-    add(`CCTV_${clip.parcel}.${clip.format.ext}`, clip.blob, note);
+    add(n.clip(clip.format.ext, clip.parcel), clip.blob, note);
   }
   if (fileList.childElementCount) resultCard.hidden = false;
 }
 
 $('zipBtn').addEventListener('click', () =>
   guarded(async () => {
-    const errs = baseErrors();
-    if (errs.length) return showMsg(errs.join('\n'), 'error');
     const { parcel } = caseData();
-    // Always rebuild so the ZIP matches the current frame, shapes and form.
-    const files: OutFile[] = [{ path: `${parcel}/${parcel}_Evidence.jpg`, blob: await makeEvidence() }];
-    if (clip) files.push({ path: `${parcel}/CCTV_${parcel}.${clip.format.ext}`, blob: clip.blob });
-    files.push(...attachments.zipEntries(parcel));
+    const n = names();
+    // Always rebuild the JPG so the ZIP matches the current frame, shapes and form.
+    const files: OutFile[] = [];
+    if (canMakeEvidence()) files.push({ path: `${n.folder}/${n.jpg}`, blob: await makeEvidence() });
+    if (clip) files.push({ path: `${n.folder}/${n.clip(clip.format.ext)}`, blob: clip.blob });
+    files.push(...attachments.zipEntries(n.folder, n.lt));
+    if (!files.length) return showMsg('ยังไม่มีไฟล์ให้รวม — ต้องมีภาพ CCTV, ภาพ FMS, คลิป หรือรูปหลักฐาน LT อย่างน้อย 1 อย่าง', 'warn');
     const zip = await buildZip(files);
-    download(zip, `${parcel}_Evidence.zip`);
+    download(zip, n.zip);
     renderFmsStatus();
     renderFiles();
-    const extra = attachments.count ? ` · รูปประกอบ ${attachments.count} รูป` : '';
+    const extra = attachments.count ? ` · รูปหลักฐาน LT ${attachments.count} รูป` : '';
     const notes = [
-      clip ? '' : 'ยังไม่ได้อัดคลิป — ZIP มีแต่ภาพ',
-      clip && clip.parcel !== parcel ? `คลิปอัดไว้ตอนเลขพัสดุเป็น ${clip.parcel} — อัดใหม่ให้แถบข้อความตรง` : '',
-      noPointNote(),
+      ...(canMakeEvidence() ? missingNotes() : ['ไม่มีภาพหลักฐาน JPG (ไม่มีทั้งภาพ CCTV และภาพ FMS)']),
+      clip ? '' : 'ยังไม่ได้อัดคลิป',
+      clip && clip.parcel !== parcel ? `คลิปอัดไว้ตอนเลขพัสดุเป็น "${clip.parcel || 'ว่าง'}" — อัดใหม่ให้แถบข้อความตรง` : '',
+      attachments.count && !n.lt ? 'ไม่ได้กรอกเลข LT — รูปหลักฐาน LT ตั้งชื่อเป็น Runsheet / TruckRear / Seal' : '',
     ].filter(Boolean);
-    showMsg(`ZIP ${formatBytes(zip.size)} · ${parcel}${extra}${notes.length ? '\n' + notes.join('\n') : ''}`, notes.length ? 'warn' : 'ok');
+    showMsg(...withNotes(`${n.zip} ${formatBytes(zip.size)} · ${files.length} ไฟล์${extra}`, notes));
   }),
 );
 
@@ -507,7 +533,8 @@ parcelInput.value = saved.parcel ?? '';
 fmsTimeInput.value = saved.fmsTime ?? '';
 cctvTimeInput.value = saved.cctvTime ?? '';
 destInput.value = saved.dest ?? '';
-for (const el of [parcelInput, fmsTimeInput, cctvTimeInput, destInput]) el.addEventListener('input', onFormChange);
+ltInput.value = saved.lt ?? '';
+for (const el of [parcelInput, fmsTimeInput, cctvTimeInput, destInput, ltInput]) el.addEventListener('input', onFormChange);
 // A different parcel number changes the JPG header and file names.
 parcelInput.addEventListener('input', invalidateEvidence);
 onFormChange();

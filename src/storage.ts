@@ -4,6 +4,7 @@ const KEY = 'cctv-evidence-maker:v2';
 export interface SavedForm {
   parcel: string;
   status: string;
+  statusOther: string; // typed status when the dropdown is "อื่นๆ"
   fmsTime: string;
   cctvTime: string;
   dest: string;

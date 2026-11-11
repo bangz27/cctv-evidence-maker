@@ -38,6 +38,8 @@ const annotCard = $('annotCard');
 const toolSeg = $('toolSeg');
 const parcelInput = $<HTMLInputElement>('parcelInput');
 const statusInput = $<HTMLSelectElement>('statusInput');
+const statusOther = $<HTMLInputElement>('statusOther');
+const OTHER = '__other';
 const fmsTimeInput = $<HTMLInputElement>('fmsTimeInput');
 const cctvTimeInput = $<HTMLInputElement>('cctvTimeInput');
 const timeMatch = $('timeMatch');
@@ -94,7 +96,7 @@ function showMsg(text: string, kind: 'ok' | 'warn' | 'error' = 'ok'): void {
 function caseData() {
   return {
     parcel: parcelInput.value.trim().toUpperCase(),
-    status: statusInput.value.trim(),
+    status: (statusInput.value === OTHER ? statusOther.value : statusInput.value).trim(),
     fmsTime: normalizeTime(fmsTimeInput.value),
     cctvTime: normalizeTime(cctvTimeInput.value),
     dest: destInput.value.trim(), // kept as typed: may be a hub name, not only a code like SOCN
@@ -106,11 +108,13 @@ function onFormChange(): void {
   saveForm({
     parcel: parcelInput.value,
     status: statusInput.value,
+    statusOther: statusOther.value,
     fmsTime: fmsTimeInput.value,
     cctvTime: cctvTimeInput.value,
     dest: destInput.value,
     lt: ltInput.value,
   });
+  statusOther.hidden = statusInput.value !== OTHER;
   const { fmsTime, cctvTime, status } = caseData();
   // "เวลา FMHub_LHPacking" and similar texts follow the chosen status.
   document.querySelectorAll('.status-name').forEach((el) => (el.textContent = statusName(status)));
@@ -693,13 +697,14 @@ $('zipBtn').addEventListener('click', () =>
 const saved = loadForm();
 parcelInput.value = saved.parcel ?? '';
 statusInput.value = saved.status ?? '';
+statusOther.value = saved.statusOther ?? '';
 fmsTimeInput.value = saved.fmsTime ?? '';
 cctvTimeInput.value = saved.cctvTime ?? '';
 destInput.value = saved.dest ?? '';
 ltInput.value = saved.lt ?? '';
-for (const el of [parcelInput, statusInput, fmsTimeInput, cctvTimeInput, destInput, ltInput]) el.addEventListener('input', onFormChange);
+for (const el of [parcelInput, statusInput, statusOther, fmsTimeInput, cctvTimeInput, destInput, ltInput]) el.addEventListener('input', onFormChange);
 // The parcel number, LT number and Lost status are in the JPG header (the parcel also in file names).
-for (const el of [parcelInput, statusInput, ltInput]) el.addEventListener('input', invalidateEvidence);
+for (const el of [parcelInput, statusInput, statusOther, ltInput]) el.addEventListener('input', invalidateEvidence);
 
 // Clears everything that belongs to one case. The opened CCTV clip and the shapes stay,
 // since the next parcel is often on the same clip.
@@ -707,7 +712,7 @@ $('newCaseBtn').addEventListener('click', () => {
   if (busy) return;
   if (!confirm('เริ่มเคสใหม่?\nจะล้างข้อมูลเคส ภาพ FMS รูปหลักฐาน LT เฟรมที่เลือก และคลิปที่อัดไว้\n(คลิป CCTV ที่เปิดอยู่และวงยังอยู่)')) return;
   for (const el of [parcelInput, fmsTimeInput, cctvTimeInput, destInput, ltInput]) el.value = '';
-  statusInput.value = '';
+  statusInput.value = statusOther.value = '';
   fmsData.fms = fmsData.point = fmsData.evidence = undefined;
   attachments.clear();
   chosen = null;

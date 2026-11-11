@@ -160,7 +160,7 @@
 | **⬇ ดาวน์โหลด ZIP ทั้งหมด** | ZIP รวมทุกไฟล์ที่มี (ภาพหลักฐาน คลิป รูปหลักฐาน LT) ในโฟลเดอร์ชื่อเลขพัสดุ |
 
 **ภาพหลักฐาน (JPG)** ประกอบด้วย:
-**สถานะใน dropdown:** FMHub_LHTransported, SOC_LHArrived, FMHub_LHTransporting, FMHub_LHPacked, FMHub_LHPacking, SOC_LHTransported, FMHub_Packing, FMhub_Pickup_Handedover_to_Station, LMHub_Received, Delivered, On hold
+**สถานะใน dropdown:** FMHub_LHTransported, SOC_LHArrived, FMHub_LHTransporting, FMHub_LHPacked, FMHub_LHPacking, SOC_LHTransported, FMHub_Packing, FMhub_Pickup_Handedover_to_Station, LMHub_Received, Delivered, On hold, Return_Hub_Received, FMHub_Pickup_Onhold, Return_HUB_LHUnloaded, Return_Hub_Pickup_Handedover_to_Station, Missing · ถ้าไม่มีในรายการ เลือก **อื่นๆ (โปรดระบุ)** แล้วพิมพ์สถานะเองในช่องที่ขึ้นมา
 
 - แถบหัวสีส้ม: `หลักฐาน CCTV | เลขพัสดุ | LT: เลข LT | สถานะ Lost: สถานะ | ยิงขึ้นรถ Shuttle แล้ว` (ส่วนที่ไม่ได้กรอกจะไม่แสดง)
 - ซ้าย: เฟรม CCTV พร้อมวงแดงและกรอบเหลือง ป้ายใต้ภาพ `CCTV เวลา ยิงพัสดุขึ้นรถ Shuttle`

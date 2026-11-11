@@ -340,6 +340,9 @@ body.busy .btn {
 .field select {
   cursor: pointer;
 }
+#statusOther {
+  margin-top: 6px;
+}
 .field input::placeholder {
   color: #a3a8b8;
 }

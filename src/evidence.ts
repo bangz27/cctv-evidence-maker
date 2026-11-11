@@ -24,8 +24,9 @@ export interface Point {
 // Every field is optional: whatever is missing is left out (or shown as an empty box), never filled in.
 export interface EvidenceInput {
   parcel?: string;
+  status?: string; // the parcel's Lost status, e.g. FMHub_LHTransported
   cctvTime?: string | null; // HH:MM:SS read by the user from the CCTV clock
-  fmsTime?: string | null; // HH:MM:SS of FMHub_LHPacking
+  fmsTime?: string | null; // HH:MM:SS of the status above (FMHub_LHPacking when no status)
   frame?: CanvasImageSource & { width: number; height: number };
   shapes: Shape[];
   fms?: ImageBitmap;
@@ -36,8 +37,13 @@ export async function ensureFonts(): Promise<void> {
   await Promise.all([document.fonts.load(`700 38px ${FONT}`, 'หลักฐาน'), document.fonts.load(`400 20px ${FONT}`, 'หลักฐาน')]);
 }
 
-export function headerText(parcel?: string): string {
-  return ['หลักฐาน CCTV', parcel, 'ยิงขึ้นรถ Shuttle แล้ว'].filter(Boolean).join(' | ');
+// The FMS status whose time is compared with CCTV; FMHub_LHPacking unless one is chosen.
+export function statusName(status?: string): string {
+  return status || 'FMHub_LHPacking';
+}
+
+export function headerText(parcel?: string, status?: string): string {
+  return ['หลักฐาน CCTV', parcel, status && `สถานะ Lost: ${status}`, 'ยิงขึ้นรถ Shuttle แล้ว'].filter(Boolean).join(' | ');
 }
 
 export function renderEvidence(inp: EvidenceInput): HTMLCanvasElement {
@@ -53,8 +59,9 @@ export function renderEvidence(inp: EvidenceInput): HTMLCanvasElement {
   ctx.fillRect(0, 0, W, HEADER_H);
   ctx.fillStyle = '#fff';
   ctx.textBaseline = 'middle';
-  fitText(ctx, headerText(inp.parcel), 38, W - PAD * 2);
-  ctx.fillText(headerText(inp.parcel), PAD, HEADER_H / 2 + 2);
+  const header = headerText(inp.parcel, inp.status);
+  fitText(ctx, header, 38, W - PAD * 2);
+  ctx.fillText(header, PAD, HEADER_H / 2 + 2);
 
   // Left: CCTV frame + annotations, fitted into 1200 x 675 (top-left aligned)
   if (inp.frame) {
@@ -92,9 +99,9 @@ export function renderEvidence(inp: EvidenceInput): HTMLCanvasElement {
   // Labels: a missing time is left out; the match note needs both times.
   const match = inp.cctvTime && inp.fmsTime ? (inp.cctvTime === inp.fmsTime ? ' (ตรงกับ CCTV)' : ' (ใกล้เคียง CCTV)') : '';
   label(ctx, ['CCTV', inp.cctvTime, 'ยิงพัสดุขึ้นรถ Shuttle'].filter(Boolean).join(' '), PAD, LEFT_W);
-  const fmsLabelW = label(ctx, ['FMS FMHub_LHPacking', inp.fmsTime].filter(Boolean).join(' ') + match, RIGHT_X, RIGHT_W);
+  const fmsLabelW = label(ctx, ['FMS', statusName(inp.status), inp.fmsTime].filter(Boolean).join(' ') + match, RIGHT_X, RIGHT_W);
 
-  // Arrow from the FMS label up to the clicked LHPacking row
+  // Arrow from the FMS label up to the clicked status row
   if (inp.fms && inp.point) {
     const tx = RIGHT_X + inp.point.x * ms;
     const ty = IMG_TOP + inp.point.y * ms;

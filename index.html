@@ -8,7 +8,7 @@
   <body>
     <header class="topbar">
       <h1>แนบหลักฐาน Lost</h1>
-      <span class="sub">ทำภาพหลักฐาน FMHub_LHTransported · ทำงานในเบราว์เซอร์ทั้งหมด ไม่มีการอัปโหลดคลิป</span>
+      <span class="sub">ทำภาพหลักฐาน แก้เคลม Lost · ทำงานในเบราว์เซอร์ทั้งหมด ไม่มีการอัปโหลดคลิป</span>
     </header>
 
     <main class="layout">
@@ -71,7 +71,7 @@
         <!-- 4. ภาพ FMS -->
         <div class="card">
           <h2>4. ภาพ FMS</h2>
-          <p class="hint">กด <kbd>Ctrl</kbd>+<kbd>V</kbd> วางภาพแคปหน้า FMS ของเลขพัสดุนี้ หรือกด "เลือกไฟล์" · จากนั้นคลิกบนภาพตรงบรรทัด FMHub_LHPacking เพื่อให้ลูกศรชี้</p>
+          <p class="hint">กด <kbd>Ctrl</kbd>+<kbd>V</kbd> วางภาพแคปหน้า FMS ของเลขพัสดุนี้ หรือกด "เลือกไฟล์" · จากนั้นคลิกบนภาพตรงบรรทัด <span class="status-name">FMHub_LHPacking</span> เพื่อให้ลูกศรชี้</p>
           <div class="fms-row">
             <label class="btn small">เลือกไฟล์ภาพ FMS<input type="file" accept="image/*" id="fmsFileInput" hidden /></label>
             <span class="chips" id="fmsStatus"></span>
@@ -106,13 +106,32 @@
         <!-- 3. ข้อมูลเคส -->
         <div class="card">
           <h2>3. ข้อมูลเคส</h2>
-          <div class="field">
-            <label for="parcelInput">เลขพัสดุ</label>
-            <input id="parcelInput" placeholder="TH2699586897989" autocomplete="off" />
+          <div class="grid2">
+            <div class="field">
+              <label for="parcelInput">เลขพัสดุ</label>
+              <input id="parcelInput" placeholder="TH2699586897989" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="statusInput">สถานะพัสดุ Lost</label>
+              <select id="statusInput">
+                <option value="">— ไม่ระบุ —</option>
+                <option>FMHub_LHTransported</option>
+                <option>SOC_LHArrived</option>
+                <option>FMHub_LHTransporting</option>
+                <option>FMHub_LHPacked</option>
+                <option>FMHub_LHPacking</option>
+                <option>SOC_LHTransported</option>
+                <option>FMHub_Packing</option>
+                <option>FMhub_Pickup_Handedover_to_Station</option>
+                <option>LMHub_Received</option>
+                <option>Delivered</option>
+                <option>On hold</option>
+              </select>
+            </div>
           </div>
           <div class="grid2">
             <div class="field">
-              <label for="fmsTimeInput">เวลา FMHub_LHPacking</label>
+              <label for="fmsTimeInput">เวลา <span class="status-name">FMHub_LHPacking</span></label>
               <input id="fmsTimeInput" placeholder="20:52:25" inputmode="numeric" autocomplete="off" />
             </div>
             <div class="field">
@@ -123,12 +142,7 @@
           <div class="time-match" id="timeMatch"></div>
           <div class="field">
             <label for="destInput">ปลายทาง</label>
-            <input id="destInput" list="destList" placeholder="SOCN" autocomplete="off" />
-            <datalist id="destList">
-              <option value="SOCN"></option>
-              <option value="SOCE"></option>
-              <option value="SOCW"></option>
-            </datalist>
+            <input id="destInput" placeholder="เช่น SOCN หรือ ชื่อฮับ" autocomplete="off" />
           </div>
         </div>
 
@@ -154,9 +168,23 @@
           <p class="hint">ระหว่างอัด อย่าสลับไปแท็บอื่น (เบราว์เซอร์จะชะลอการวาดเฟรม) · อัดแบบเวลาจริง คลิป 1 นาทีใช้เวลา 1 นาที</p>
           <h3>ดาวน์โหลด</h3>
           <button class="btn primary" id="zipBtn">⬇ ดาวน์โหลด ZIP ทั้งหมด</button>
+          <!-- เปลี่ยน href เป็นลิงก์โฟลเดอร์ทีมได้ เช่น https://drive.google.com/drive/folders/xxxx -->
+          <a class="btn" id="driveBtn" href="https://drive.google.com/drive/my-drive" target="_blank" rel="noopener">☁ เปิด Google Drive ↗</a>
+          <p class="hint">ดาวน์โหลด ZIP ก่อน แล้วกดปุ่มนี้เพื่อเปิด Google Drive ในแท็บใหม่ ลากไฟล์ไปวางในโฟลเดอร์ที่ต้องการ</p>
         </div>
       </aside>
     </main>
+
+    <!-- shown while a clip is recording -->
+    <div class="rec-overlay" id="recOverlay" hidden>
+      <div class="rec-box" role="alertdialog" aria-live="assertive">
+        <div class="rec-title"><span class="rec-dot"></span>กำลังอัดคลิป…</div>
+        <p class="rec-warn">⚠️ อย่าสลับแท็บ ย่อหน้าต่าง หรือปิดหน้านี้ จนกว่าจะอัดเสร็จ</p>
+        <p class="rec-sub">ถ้าสลับแท็บ คลิปจะกระตุกหรือว่างเปล่า</p>
+        <progress id="recOverlayProgress" max="1" value="0"></progress>
+        <div class="rec-time" id="recOverlayTime"></div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

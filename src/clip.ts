@@ -118,5 +118,8 @@ export async function recordClip(o: ClipOptions): Promise<{ blob: Blob; format: 
   clearInterval(timer);
   el.removeEventListener('ended', finish);
   o.onProgress?.(1);
-  return { blob: new Blob(chunks, { type: format.mime.split(';')[0] }), format };
+  const blob = new Blob(chunks, { type: format.mime.split(';')[0] });
+  // Happens when the tab was in the background the whole time: the browser drew no frames.
+  if (!blob.size) throw new Error('อัดคลิปไม่สำเร็จ (ไม่ได้ภาพเลย) — เปิดหน้าเว็บนี้ค้างไว้ระหว่างอัด แล้วลองใหม่');
+  return { blob, format };
 }

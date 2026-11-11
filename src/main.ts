@@ -8,7 +8,7 @@ import './style.css';
 import { Annotator, type Tool } from './annotate';
 import { Attachments } from './attachments';
 import { recordClip, type ClipFormat } from './clip';
-import { ensureFonts, renderEvidence, toJpeg, type Point } from './evidence';
+import { ensureFonts, renderEvidence, statusName, toJpeg, type Point } from './evidence';
 import { buildZip, download, formatBytes, type OutFile } from './files';
 import { loadForm, saveForm } from './storage';
 import { formatSeconds, normalizeTime } from './time';
@@ -36,6 +36,7 @@ const chosenInfo = $('chosenInfo');
 const annotCard = $('annotCard');
 const toolSeg = $('toolSeg');
 const parcelInput = $<HTMLInputElement>('parcelInput');
+const statusInput = $<HTMLSelectElement>('statusInput');
 const fmsTimeInput = $<HTMLInputElement>('fmsTimeInput');
 const cctvTimeInput = $<HTMLInputElement>('cctvTimeInput');
 const timeMatch = $('timeMatch');
@@ -50,6 +51,9 @@ const clipStart = $<HTMLInputElement>('clipStart');
 const clipEnd = $<HTMLInputElement>('clipEnd');
 const recordBtn = $<HTMLButtonElement>('recordBtn');
 const recordProgress = $<HTMLProgressElement>('recordProgress');
+const recOverlay = $('recOverlay');
+const recOverlayProgress = $<HTMLProgressElement>('recOverlayProgress');
+const recOverlayTime = $('recOverlayTime');
 const resultCard = $('resultCard');
 const resultMsg = $('resultMsg');
 const evidencePreview = $<HTMLImageElement>('evidencePreview');
@@ -86,9 +90,10 @@ function showMsg(text: string, kind: 'ok' | 'warn' | 'error' = 'ok'): void {
 function caseData() {
   return {
     parcel: parcelInput.value.trim().toUpperCase(),
+    status: statusInput.value.trim(),
     fmsTime: normalizeTime(fmsTimeInput.value),
     cctvTime: normalizeTime(cctvTimeInput.value),
-    dest: destInput.value.trim().toUpperCase(),
+    dest: destInput.value.trim(), // kept as typed: may be a hub name, not only a code like SOCN
     lt: ltInput.value.trim().toUpperCase(),
   };
 }
@@ -96,12 +101,16 @@ function caseData() {
 function onFormChange(): void {
   saveForm({
     parcel: parcelInput.value,
+    status: statusInput.value,
     fmsTime: fmsTimeInput.value,
     cctvTime: cctvTimeInput.value,
     dest: destInput.value,
     lt: ltInput.value,
   });
-  const { fmsTime, cctvTime } = caseData();
+  const { fmsTime, cctvTime, status } = caseData();
+  // "เวลา FMHub_LHPacking" and similar texts follow the chosen status.
+  document.querySelectorAll('.status-name').forEach((el) => (el.textContent = statusName(status)));
+  if (fmsData.fms) renderFms();
   if (!fmsTime || !cctvTime) {
     timeMatch.className = 'time-match';
     timeMatch.textContent = 'กรอกเวลาเป็น HH:MM:SS เช่น 20:52:25';
@@ -171,7 +180,7 @@ function renderFms(): void {
   }
   fmsPointInfo.textContent = p.point
     ? '✔ ตั้งจุดลูกศรแล้ว (คลิกใหม่เพื่อย้าย)'
-    : 'คลิกบนภาพตรงบรรทัด FMHub_LHPacking เพื่อกำหนดจุดที่ลูกศรชี้';
+    : `คลิกบนภาพตรงบรรทัด ${statusName(caseData().status)} เพื่อกำหนดจุดที่ลูกศรชี้`;
 }
 
 fmsCanvas.addEventListener('click', (e) => {
@@ -359,7 +368,7 @@ function missingNotes(): string[] {
   if (!fmsData.fms) notes.push('ไม่มีภาพ FMS');
   else if (!fmsData.point) notes.push('ไม่มีลูกศร (ยังไม่ได้คลิกจุดบนภาพ FMS)');
   if (!c.parcel) notes.push('ไม่ได้กรอกเลขพัสดุ');
-  if (fmsTimeInput.value.trim() && !c.fmsTime) notes.push('เวลา FMHub_LHPacking รูปแบบไม่ถูกต้อง จึงไม่ได้ใส่ในภาพ');
+  if (fmsTimeInput.value.trim() && !c.fmsTime) notes.push(`เวลา ${statusName(c.status)} รูปแบบไม่ถูกต้อง จึงไม่ได้ใส่ในภาพ`);
   if (cctvTimeInput.value.trim() && !c.cctvTime) notes.push('เวลา CCTV รูปแบบไม่ถูกต้อง จึงไม่ได้ใส่ในภาพ');
   return notes;
 }
@@ -389,6 +398,7 @@ async function makeEvidence(): Promise<Blob> {
   await ensureFonts();
   const canvas = renderEvidence({
     parcel: c.parcel,
+    status: c.status,
     cctvTime: c.cctvTime,
     fmsTime: c.fmsTime,
     frame: chosen?.canvas,
@@ -447,7 +457,7 @@ recordBtn.addEventListener('click', () =>
 
     const barText = [
       c.parcel,
-      c.fmsTime && `LHPacking ${c.fmsTime}`,
+      c.fmsTime && `${c.status || 'LHPacking'} ${c.fmsTime}`,
       c.dest ? `ยิงขึ้นรถ Shuttle ไป ${c.dest}` : 'ยิงขึ้นรถ Shuttle',
     ]
       .filter(Boolean)
@@ -456,6 +466,21 @@ recordBtn.addEventListener('click', () =>
     recordBtn.textContent = '● กำลังอัด...';
     recordProgress.hidden = false;
     recordProgress.value = 0;
+    // In a background tab the browser draws few or no frames, so the clip comes out choppy:
+    // warn on screen and in the tab title for as long as it records.
+    let wentHidden = document.hidden;
+    const onHide = () => (wentHidden ||= document.hidden);
+    document.addEventListener('visibilitychange', onHide);
+    const title = document.title;
+    const total = end - start;
+    const showProgress = (f: number) => {
+      recordProgress.value = f;
+      recOverlayProgress.value = f;
+      recOverlayTime.textContent = `${(f * total).toFixed(1)} / ${total.toFixed(1)} วิ`;
+    };
+    showProgress(0);
+    recOverlay.hidden = false;
+    document.title = '● กำลังอัด — อย่าสลับแท็บ';
     try {
       const res = await recordClip({
         video: vc,
@@ -463,18 +488,24 @@ recordBtn.addEventListener('click', () =>
         end,
         shapes: annot.shapes,
         barText,
-        onProgress: (f) => (recordProgress.value = f),
+        onProgress: showProgress,
       });
       clip = { ...res, parcel: c.parcel, stale: false };
     } finally {
+      recOverlay.hidden = true;
+      document.title = title;
+      document.removeEventListener('visibilitychange', onHide);
       recordBtn.textContent = '● อัดคลิป 1280×720';
       recordProgress.hidden = true;
       await vc.seek(back);
       updateTime();
     }
     renderFiles();
-    const big = clip.blob.size > 10 * 1024 * 1024 ? ' · เกิน 10MB ลองตัดช่วงให้สั้นลง' : '';
-    showMsg(`อัดคลิปเสร็จ ${clip.format.ext.toUpperCase()} ${formatBytes(clip.blob.size)} (${(end - start).toFixed(1)} วิ)${big}`, big ? 'warn' : 'ok');
+    const notes = [
+      clip.blob.size > 10 * 1024 * 1024 ? 'เกิน 10MB ลองตัดช่วงให้สั้นลง' : '',
+      wentHidden ? 'มีการสลับไปแท็บอื่นระหว่างอัด คลิปอาจกระตุกหรือขาด — แนะนำให้อัดใหม่โดยเปิดหน้านี้ค้างไว้' : '',
+    ].filter(Boolean);
+    showMsg(...withNotes(`อัดคลิปเสร็จ ${clip.format.ext.toUpperCase()} ${formatBytes(clip.blob.size)} (${(end - start).toFixed(1)} วิ)`, notes));
   }),
 );
 
@@ -530,13 +561,15 @@ $('zipBtn').addEventListener('click', () =>
 // ---------- init ----------
 const saved = loadForm();
 parcelInput.value = saved.parcel ?? '';
+statusInput.value = saved.status ?? '';
 fmsTimeInput.value = saved.fmsTime ?? '';
 cctvTimeInput.value = saved.cctvTime ?? '';
 destInput.value = saved.dest ?? '';
 ltInput.value = saved.lt ?? '';
-for (const el of [parcelInput, fmsTimeInput, cctvTimeInput, destInput, ltInput]) el.addEventListener('input', onFormChange);
-// A different parcel number changes the JPG header and file names.
+for (const el of [parcelInput, statusInput, fmsTimeInput, cctvTimeInput, destInput, ltInput]) el.addEventListener('input', onFormChange);
+// The parcel number and Lost status are in the JPG header (the number also in file names).
 parcelInput.addEventListener('input', invalidateEvidence);
+statusInput.addEventListener('input', invalidateEvidence);
 onFormChange();
 renderChosen();
 renderFmsStatus();

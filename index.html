@@ -14,102 +14,7 @@
 
     <main class="layout">
       <section class="col-main">
-        <!-- 1. เปิดคลิป -->
-        <div class="card">
-          <div class="card-head">
-            <h2>เปิดคลิป CCTV</h2>
-            <label class="btn small" id="changeClipBtn" hidden>
-              เปลี่ยนคลิป <input type="file" accept="video/*,.mp4,.mkv,.avi,.mov" id="fileInput2" hidden />
-            </label>
-          </div>
-          <label class="dropzone" id="dropzone">
-            <input type="file" accept="video/*,.mp4,.mkv,.avi,.mov" id="fileInput" hidden />
-            <strong>ลากไฟล์คลิปมาวางที่นี่</strong>
-            <span>หรือคลิกเพื่อเลือกไฟล์ (.mp4 จาก DVR)</span>
-          </label>
-          <div class="alert error" id="videoError" hidden></div>
-          <div class="file-name" id="fileName"></div>
-
-          <div class="stage" id="stage" hidden>
-            <video id="video" playsinline muted preload="auto"></video>
-            <canvas id="overlay"></canvas>
-          </div>
-
-          <div id="playerControls" hidden>
-            <input type="range" id="scrubber" min="0" max="1" step="any" value="0" />
-            <div class="timeline-info">
-              <span id="timeInfo">0.00 / 0.00 วิ</span>
-              <label class="fps">fps <input type="number" id="fpsInput" min="1" max="120" step="1" value="25" /></label>
-            </div>
-            <div class="btn-row">
-              <button class="btn" data-step="-1s" title="ถอยหลัง 1 วินาที (Shift+←)">◀◀ -1s</button>
-              <button class="btn" data-step="-1f" title="ถอยหลัง 1 เฟรม (←)">◀ -1 เฟรม</button>
-              <button class="btn" id="playBtn" title="เล่น/หยุด (Space)">▶ เล่น</button>
-              <button class="btn" data-step="+1f" title="เดินหน้า 1 เฟรม (→)">+1 เฟรม ▶</button>
-              <button class="btn" data-step="+1s" title="เดินหน้า 1 วินาที (Shift+→)">+1s ▶▶</button>
-              <button class="btn primary" id="useFrameBtn">✔ ใช้เฟรมนี้</button>
-            </div>
-            <div class="btn-row">
-              <button class="btn" id="readClockBtn" title="อ่านเวลาในกรอบเหลืองของเฟรมที่เห็นอยู่ แล้วใส่ช่องเวลา CCTV">🔍 อ่านเวลาจากจอ</button>
-              <button class="btn" id="seekFmsBtn" title="หาเฟรมที่นาฬิกาบนจอตรงกับเวลาที่กรอกในข้อมูลเคส">⏩ ไปที่เวลา FMS</button>
-            </div>
-            <div class="hint" id="ocrStatus">อ่านนาฬิกาในกรอบเหลือง — วางกรอบเหลืองให้ครอบเวลามุมจอก่อน · ตรวจผลกับภาพทุกครั้ง</div>
-            <div class="chosen" id="chosenInfo">ยังไม่ได้เลือกเฟรม</div>
-          </div>
-        </div>
-
-        <!-- 2. วาด annotation -->
-        <div class="card" id="annotCard" hidden>
-          <h2>วาดวง / กรอบ</h2>
-          <p class="hint">ลากในวงเพื่อย้าย · ลากมุมเพื่อย่อขยาย · เลือกเครื่องมือ "+ วงรี" / "+ กรอบ" แล้วลากบนภาพเพื่อเพิ่ม · กรอบเหลืองไว้ครอบเวลามุมจอ (ห้ามทับ/แก้เวลา)</p>
-          <div class="btn-row">
-            <div class="seg" id="toolSeg">
-              <button class="btn active" data-tool="select">เลือก/ย้าย</button>
-              <button class="btn" data-tool="ellipse">+ วงรีแดง</button>
-              <button class="btn" data-tool="rect">+ กรอบเหลือง</button>
-            </div>
-            <button class="btn" id="deleteShapeBtn">ลบที่เลือก</button>
-            <button class="btn" id="undoBtn">↶ Undo</button>
-            <button class="btn" id="resetBtn">Reset</button>
-          </div>
-        </div>
-
-        <!-- 4. ภาพ FMS -->
-        <div class="card">
-          <h2>ภาพ FMS</h2>
-          <p class="hint">กด <kbd>Ctrl</kbd>+<kbd>V</kbd> วางภาพแคปหน้า FMS ของเลขพัสดุนี้ หรือกด "เลือกไฟล์" · จากนั้นคลิกบนภาพตรงบรรทัด <span class="status-name">FMHub_LHPacking</span> เพื่อให้ลูกศรชี้</p>
-          <div class="fms-row">
-            <label class="btn small">เลือกไฟล์ภาพ FMS<input type="file" accept="image/*" id="fmsFileInput" hidden /></label>
-            <span class="chips" id="fmsStatus"></span>
-          </div>
-          <div class="fms-editor" id="fmsEditor" hidden>
-            <div class="hint" id="fmsPointInfo"></div>
-            <canvas id="fmsCanvas"></canvas>
-          </div>
-        </div>
-
-        <!-- 5. รูปประกอบ -->
-        <div class="card">
-          <h2>แนบหลักฐาน LT <span class="optional">(SOC_LHArrived, FMHub_LHTransported)</span></h2>
-          <div class="field lt-field">
-            <label for="ltInput">เลข LT</label>
-            <input id="ltInput" placeholder="LT0Q9K29ENK1" autocomplete="off" />
-          </div>
-          <p class="hint">รูปในส่วนนี้จะตั้งชื่อไฟล์ตามเลข LT เช่น <code>LT…_Runsheet.jpg</code> · แนบได้หลายรูปต่อหัวข้อ · กด "+ เพิ่มรูป" หรือลากรูปมาวางที่ช่อง · รูปจะถูกใส่ใน ZIP เป็นไฟล์ต้นฉบับ ไม่ถูกบีบอัดหรือแก้ไข</p>
-          <div class="attach-grid" id="attachGrid"></div>
-        </div>
-
-        <!-- ผลลัพธ์ -->
-        <div class="card" id="resultCard" hidden>
-          <h2>ผลลัพธ์</h2>
-          <div class="alert" id="resultMsg" hidden></div>
-          <img id="evidencePreview" class="evidence-preview" alt="ตัวอย่างภาพหลักฐาน" hidden />
-          <ul class="file-list" id="fileList"></ul>
-        </div>
-      </section>
-
-      <aside class="col-side">
-        <!-- 3. ข้อมูลเคส -->
+        <!-- ข้อมูลเคส: first, so the FMS time is there for ⏩ ไปที่เวลา FMS -->
         <div class="card">
           <h2>ข้อมูลเคส</h2>
           <div class="grid2">
@@ -159,7 +64,102 @@
           </div>
         </div>
 
-        <!-- 5. Export -->
+        <!-- เปิดคลิป -->
+        <div class="card">
+          <div class="card-head">
+            <h2>เปิดคลิป CCTV</h2>
+            <label class="btn small" id="changeClipBtn" hidden>
+              เปลี่ยนคลิป <input type="file" accept="video/*,.mp4,.mkv,.avi,.mov" id="fileInput2" hidden />
+            </label>
+          </div>
+          <label class="dropzone" id="dropzone">
+            <input type="file" accept="video/*,.mp4,.mkv,.avi,.mov" id="fileInput" hidden />
+            <strong>ลากไฟล์คลิปมาวางที่นี่</strong>
+            <span>หรือคลิกเพื่อเลือกไฟล์ (.mp4 จาก DVR)</span>
+          </label>
+          <div class="alert error" id="videoError" hidden></div>
+          <div class="file-name" id="fileName"></div>
+
+          <div class="stage" id="stage" hidden>
+            <video id="video" playsinline muted preload="auto"></video>
+            <canvas id="overlay"></canvas>
+          </div>
+
+          <div id="playerControls" hidden>
+            <input type="range" id="scrubber" min="0" max="1" step="any" value="0" />
+            <div class="timeline-info">
+              <span id="timeInfo">0.00 / 0.00 วิ</span>
+              <label class="fps">fps <input type="number" id="fpsInput" min="1" max="120" step="1" value="25" /></label>
+            </div>
+            <div class="btn-row">
+              <button class="btn" data-step="-1s" title="ถอยหลัง 1 วินาที (Shift+←)">◀◀ -1s</button>
+              <button class="btn" data-step="-1f" title="ถอยหลัง 1 เฟรม (←)">◀ -1 เฟรม</button>
+              <button class="btn" id="playBtn" title="เล่น/หยุด (Space)">▶ เล่น</button>
+              <button class="btn" data-step="+1f" title="เดินหน้า 1 เฟรม (→)">+1 เฟรม ▶</button>
+              <button class="btn" data-step="+1s" title="เดินหน้า 1 วินาที (Shift+→)">+1s ▶▶</button>
+              <button class="btn primary" id="useFrameBtn">✔ ใช้เฟรมนี้</button>
+            </div>
+            <div class="btn-row">
+              <button class="btn" id="readClockBtn" title="อ่านเวลาในกรอบเหลืองของเฟรมที่เห็นอยู่ แล้วใส่ช่องเวลา CCTV">🔍 อ่านเวลาจากจอ</button>
+              <button class="btn" id="seekFmsBtn" title="หาเฟรมที่นาฬิกาบนจอตรงกับเวลาที่กรอกในข้อมูลเคส">⏩ ไปที่เวลา FMS</button>
+            </div>
+            <div class="hint" id="ocrStatus">อ่านนาฬิกาในกรอบเหลือง — วางกรอบเหลืองให้ครอบเวลามุมจอก่อน · ตรวจผลกับภาพทุกครั้ง</div>
+            <div class="chosen" id="chosenInfo">ยังไม่ได้เลือกเฟรม</div>
+          </div>
+        </div>
+
+        <!-- วาด annotation -->
+        <div class="card" id="annotCard" hidden>
+          <h2>วาดวง / กรอบ</h2>
+          <p class="hint">ลากในวงเพื่อย้าย · ลากมุมเพื่อย่อขยาย · เลือกเครื่องมือ "+ วงรี" / "+ กรอบ" แล้วลากบนภาพเพื่อเพิ่ม · กรอบเหลืองไว้ครอบเวลามุมจอ (ห้ามทับ/แก้เวลา)</p>
+          <div class="btn-row">
+            <div class="seg" id="toolSeg">
+              <button class="btn active" data-tool="select">เลือก/ย้าย</button>
+              <button class="btn" data-tool="ellipse">+ วงรีแดง</button>
+              <button class="btn" data-tool="rect">+ กรอบเหลือง</button>
+            </div>
+            <button class="btn" id="deleteShapeBtn">ลบที่เลือก</button>
+            <button class="btn" id="undoBtn">↶ Undo</button>
+            <button class="btn" id="resetBtn">Reset</button>
+          </div>
+        </div>
+
+        <!-- ภาพ FMS -->
+        <div class="card">
+          <h2>ภาพ FMS</h2>
+          <p class="hint">กด <kbd>Ctrl</kbd>+<kbd>V</kbd> วางภาพแคปหน้า FMS ของเลขพัสดุนี้ หรือกด "เลือกไฟล์" · จากนั้นคลิกบนภาพตรงบรรทัด <span class="status-name">FMHub_LHPacking</span> เพื่อให้ลูกศรชี้</p>
+          <div class="fms-row">
+            <label class="btn small">เลือกไฟล์ภาพ FMS<input type="file" accept="image/*" id="fmsFileInput" hidden /></label>
+            <span class="chips" id="fmsStatus"></span>
+          </div>
+          <div class="fms-editor" id="fmsEditor" hidden>
+            <div class="hint" id="fmsPointInfo"></div>
+            <canvas id="fmsCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- รูปประกอบ -->
+        <div class="card">
+          <h2>แนบหลักฐาน LT <span class="optional">(SOC_LHArrived, FMHub_LHTransported)</span></h2>
+          <div class="field lt-field">
+            <label for="ltInput">เลข LT</label>
+            <input id="ltInput" placeholder="LT0Q9K29ENK1" autocomplete="off" />
+          </div>
+          <p class="hint">รูปในส่วนนี้จะตั้งชื่อไฟล์ตามเลข LT เช่น <code>LT…_Runsheet.jpg</code> · แนบได้หลายรูปต่อหัวข้อ · กด "+ เพิ่มรูป" หรือลากรูปมาวางที่ช่อง · รูปจะถูกใส่ใน ZIP เป็นไฟล์ต้นฉบับ ไม่ถูกบีบอัดหรือแก้ไข</p>
+          <div class="attach-grid" id="attachGrid"></div>
+        </div>
+
+        <!-- ผลลัพธ์ -->
+        <div class="card" id="resultCard" hidden>
+          <h2>ผลลัพธ์</h2>
+          <div class="alert" id="resultMsg" hidden></div>
+          <img id="evidencePreview" class="evidence-preview" alt="ตัวอย่างภาพหลักฐาน" hidden />
+          <ul class="file-list" id="fileList"></ul>
+        </div>
+      </section>
+
+      <aside class="col-side">
+        <!-- Export -->
         <div class="card accent">
           <h2>สร้างหลักฐาน</h2>
           <div class="btn-col">

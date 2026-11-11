@@ -95,6 +95,14 @@ body.busy {
     gap: 16px;
   }
 }
+/* The export card stays in view while you work down the left column. */
+@media (min-width: 981px) {
+  .col-side {
+    position: sticky;
+    top: 16px;
+    align-self: start;
+  }
+}
 
 .col-main,
 .col-side {

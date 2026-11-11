@@ -53,6 +53,14 @@ body.busy {
   font-size: 13px;
   opacity: 0.9;
 }
+.topbar .new-case {
+  margin-left: auto;
+  align-self: center;
+  background: #fff;
+  border-color: #fff;
+  color: var(--orange);
+  font-weight: 700;
+}
 
 .layout {
   display: grid;
@@ -330,6 +338,13 @@ body.busy .btn {
   font-size: 14px;
   font-weight: 400;
   color: var(--muted);
+}
+
+.ocr-ok {
+  color: var(--ok);
+}
+.ocr-warn {
+  color: var(--warn);
 }
 
 .lt-field {

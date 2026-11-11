@@ -7,6 +7,7 @@ const hasRVFC = typeof HTMLVideoElement !== 'undefined' && 'requestVideoFrameCal
 export class VideoController {
   fps = 25;
   private url: string | null = null;
+  file: Blob | null = null; // the opened file, for the fast clip path to demux directly
 
   constructor(readonly el: HTMLVideoElement) {}
 
@@ -23,6 +24,7 @@ export class VideoController {
   async load(file: Blob): Promise<void> {
     if (this.url) URL.revokeObjectURL(this.url);
     this.url = URL.createObjectURL(file);
+    this.file = file;
     const el = this.el;
     el.src = this.url;
     await new Promise<void>((resolve, reject) => {

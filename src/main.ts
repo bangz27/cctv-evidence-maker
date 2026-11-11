@@ -10,6 +10,7 @@ import { Attachments } from './attachments';
 import { recordClip, type ClipFormat } from './clip';
 import { ensureFonts, renderEvidence, statusName, toJpeg, type Point } from './evidence';
 import { buildZip, download, formatBytes, type OutFile } from './files';
+import { initStats, track } from './stats';
 import { loadForm, saveForm } from './storage';
 import { formatSeconds, normalizeTime } from './time';
 import { VideoController } from './video';
@@ -54,6 +55,9 @@ const recordProgress = $<HTMLProgressElement>('recordProgress');
 const recOverlay = $('recOverlay');
 const recOverlayProgress = $<HTMLProgressElement>('recOverlayProgress');
 const recOverlayTime = $('recOverlayTime');
+const recOverlayTitle = $('recOverlayTitle');
+const recOverlayWarn = $('recOverlayWarn');
+const recOverlaySub = $('recOverlaySub');
 const resultCard = $('resultCard');
 const resultMsg = $('resultMsg');
 const evidencePreview = $<HTMLImageElement>('evidencePreview');
@@ -345,6 +349,113 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// ---------- read the on-screen clock (OCR) ----------
+const ocrStatus = $('ocrStatus');
+const clockBox = () => annot.shapes.find((s) => s.type === 'rect');
+
+function ocrMsg(text: string, kind: '' | 'ok' | 'warn' = ''): void {
+  ocrStatus.textContent = text;
+  ocrStatus.className = `hint ${kind ? `ocr-${kind}` : ''}`;
+}
+
+// Reads the clock in the yellow box at video time t (or the frame shown now).
+async function clockAt(t?: number): Promise<string | null> {
+  const { readClock } = await import('./ocr');
+  if (t !== undefined) await vc.seek(t);
+  else if (videoEl.seeking) await new Promise((r) => videoEl.addEventListener('seeked', r, { once: true }));
+  return (await readClock(videoEl, clockBox()!)).time;
+}
+
+function ocrReady(): boolean {
+  if (!vc.width) return ocrMsg('ยังไม่ได้เปิดคลิป', 'warn'), false;
+  if (!clockBox()) return ocrMsg('ไม่มีกรอบเหลือง — กด "+ กรอบเหลือง" แล้ววางครอบเวลามุมจอ', 'warn'), false;
+  return true;
+}
+
+$('readClockBtn').addEventListener('click', () =>
+  guarded(async () => {
+    if (!ocrReady()) return;
+    videoEl.pause();
+    ocrMsg('กำลังอ่านเวลาจากจอ… (ครั้งแรกโหลดระบบอ่านตัวอักษรสักครู่)');
+    const time = await clockAt();
+    if (!time) return ocrMsg('อ่านเวลาไม่ได้ — ตรวจว่ากรอบเหลืองครอบเวลามุมจอพอดี แล้วลองใหม่ หรือกรอกเอง', 'warn');
+    cctvTimeInput.value = time;
+    track('ocr-read');
+    onFormChange();
+    invalidateEvidence();
+    ocrMsg(`อ่านได้ ${time} → ใส่ในช่องเวลา CCTV แล้ว · ตรวจกับภาพอีกครั้ง`, 'ok');
+  }),
+);
+
+// Finds the frame whose clock shows the FMS time. DVR exports don't keep one speed: a clip can
+// run in real time and then switch to fast-forward. So this keeps a bracket [lo, hi] of frames
+// whose clocks are before/after the target and narrows it, interpolating inside the bracket.
+$('seekFmsBtn').addEventListener('click', () =>
+  guarded(async () => {
+    if (!ocrReady()) return;
+    const target = caseData().fmsTime;
+    if (!target) return ocrMsg(`กรอกเวลา ${statusName(caseData().status)} ในข้อมูลเคสก่อน`, 'warn');
+    videoEl.pause();
+    const { toSeconds } = await import('./ocr');
+    const T = toSeconds(target);
+    const tEnd = Math.max(0, vc.duration - 0.05);
+    ocrMsg(`กำลังหาเวลา ${target}… (ครั้งแรกโหลดระบบอ่านตัวอักษรสักครู่)`);
+    // Clock at the first readable frame near t, stepping in the given direction.
+    const readNear = async (t: number, dir: 1 | -1): Promise<[number, number] | null> => {
+      for (let i = 0; i < 4; i++) {
+        const tt = Math.min(Math.max(0, t + dir * i * 0.5), tEnd);
+        const time = await clockAt(tt);
+        if (time) return [tt, toSeconds(time)];
+      }
+      return null;
+    };
+    let lo = await readNear(0, 1);
+    let hi = await readNear(tEnd, -1);
+    if (!lo || !hi) return ocrMsg('อ่านเวลาจากจอไม่ได้ — ตรวจว่ากรอบเหลืองครอบเวลามุมจอพอดี', 'warn');
+    if (hi[1] < lo[1]) return ocrMsg('เวลาบนจอไม่ได้เดินไปข้างหน้า (อ่านผิดหรือข้ามเที่ยงคืน) — หาเฟรมเอง', 'warn');
+    const fmt = (s: number) => new Date(s * 1000).toISOString().slice(11, 19);
+    if (T < lo[1] || T > hi[1]) return ocrMsg(`เวลา ${target} ไม่อยู่ในคลิปนี้ (คลิปนี้ ${fmt(lo[1])}–${fmt(hi[1])})`, 'warn');
+    let found: string | null = T === lo[1] ? target : T === hi[1] ? target : null;
+    if (found) await vc.seek(T === lo[1] ? lo[0] : hi[0]);
+    const frame = 1 / vc.fps;
+    for (let i = 0; i < 16 && !found && hi[0] - lo[0] > frame; i++) {
+      const span = hi[0] - lo[0];
+      // Interpolate toward the middle of the target second, but never hug either end of the
+      // bracket, so a clock that changes speed can't stall the search.
+      let t: number = lo[0] + ((T + 0.5 - lo[1]) * span) / Math.max(1, hi[1] - lo[1]);
+      t = Math.min(Math.max(t, lo[0] + span * 0.1), hi[0] - span * 0.1);
+      let time = await clockAt(t);
+      if (!time) time = await clockAt((t = lo[0] + span / 2));
+      if (!time) break;
+      const c = toSeconds(time);
+      if (c === T) found = time;
+      else if (c < T) lo = [t, c];
+      else hi = [t, c];
+    }
+    if (!found) {
+      // In fast-forward parts one frame can skip several clock seconds, so the exact second may
+      // not exist on any frame: go to the closer side of the bracket and say what it shows.
+      const best = T - lo[1] <= hi[1] - T ? lo : hi;
+      await vc.seek(best[0]);
+      updateTime();
+      cctvTimeInput.value = fmt(best[1]);
+      track('ocr-seek-nearest');
+      onFormChange();
+      invalidateEvidence();
+      return ocrMsg(
+        `ไม่มีเฟรมที่จอแสดง ${target} พอดี (ช่วงนี้ของคลิปน่าจะเป็นแบบเร่งความเร็ว) · ไปที่เฟรมใกล้ที่สุด จอแสดง ${fmt(best[1])} และใส่ช่องเวลา CCTV แล้ว (ป้ายจะเขียน "ใกล้เคียง CCTV") · ตรวจกับภาพ`,
+        'warn',
+      );
+    }
+    updateTime();
+    cctvTimeInput.value = found;
+    track('ocr-seek-found');
+    onFormChange();
+    invalidateEvidence();
+    ocrMsg(`เจอเฟรมที่จอแสดง ${found} (ที่ ${formatSeconds(videoEl.currentTime)} วิในคลิป) · ใส่ช่องเวลา CCTV แล้ว · ตรวจกับภาพ ปรับด้วย ◀ ▶ แล้วกด ✔ ใช้เฟรมนี้`, 'ok');
+  }),
+);
+
 // ---------- annotation ----------
 annot.onToolChange = (tool: Tool) => {
   toolSeg.querySelectorAll<HTMLButtonElement>('[data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === tool));
@@ -399,6 +510,7 @@ async function makeEvidence(): Promise<Blob> {
   const canvas = renderEvidence({
     parcel: c.parcel,
     status: c.status,
+    lt: c.lt,
     cctvTime: c.cctvTime,
     fmsTime: c.fmsTime,
     frame: chosen?.canvas,
@@ -434,6 +546,7 @@ $('makeOneBtn').addEventListener('click', () =>
     const { jpg } = names();
     const blob = await makeEvidence();
     download(blob, jpg);
+    track('jpg');
     renderFmsStatus();
     renderFiles();
     showMsg(...withNotes(`สร้าง ${jpg} แล้ว (${formatBytes(blob.size)})`, missingNotes()));
@@ -463,14 +576,9 @@ recordBtn.addEventListener('click', () =>
       .filter(Boolean)
       .join(' | ');
     const back = videoEl.currentTime;
-    recordBtn.textContent = '● กำลังอัด...';
+    recordBtn.textContent = '● กำลังสร้างคลิป...';
     recordProgress.hidden = false;
     recordProgress.value = 0;
-    // In a background tab the browser draws few or no frames, so the clip comes out choppy:
-    // warn on screen and in the tab title for as long as it records.
-    let wentHidden = document.hidden;
-    const onHide = () => (wentHidden ||= document.hidden);
-    document.addEventListener('visibilitychange', onHide);
     const title = document.title;
     const total = end - start;
     const showProgress = (f: number) => {
@@ -480,22 +588,42 @@ recordBtn.addEventListener('click', () =>
     };
     showProgress(0);
     recOverlay.hidden = false;
-    document.title = '● กำลังอัด — อย่าสลับแท็บ';
+    // Only the real-time fallback suffers in a background tab: warn for that one only.
+    let realtime = false;
+    let wentHidden = false;
+    const onHide = () => (wentHidden ||= realtime && document.hidden);
+    document.addEventListener('visibilitychange', onHide);
+    const setRealtime = (on: boolean) => {
+      realtime = on;
+      recOverlayWarn.hidden = recOverlaySub.hidden = !on;
+      recOverlayTitle.lastChild!.textContent = on ? 'กำลังอัดคลิป…' : 'กำลังสร้างคลิป…';
+      document.title = on ? '● กำลังอัด — อย่าสลับแท็บ' : '● กำลังสร้างคลิป…';
+      if (on) wentHidden = document.hidden;
+    };
+    const t0 = performance.now();
     try {
-      const res = await recordClip({
-        video: vc,
-        start,
-        end,
-        shapes: annot.shapes,
-        barText,
-        onProgress: showProgress,
-      });
-      clip = { ...res, parcel: c.parcel, stale: false };
+      setRealtime(false);
+      // Loaded on first use: the MP4 demuxer/muxer would more than double the page's JS.
+      const { FastClipUnavailable, renderClipFast } = await import('./fastclip');
+      try {
+        if (!vc.file) throw new FastClipUnavailable('no file');
+        const blob = await renderClipFast({ file: vc.file, start, end, srcW: vc.width, srcH: vc.height, shapes: annot.shapes, barText, onProgress: showProgress });
+        clip = { blob, format: { mime: 'video/mp4', ext: 'mp4' }, parcel: c.parcel, stale: false };
+        track('clip-fast');
+      } catch (err) {
+        if (!(err instanceof FastClipUnavailable)) throw err;
+        console.info('fast clip unavailable, recording in real time:', err.message);
+        setRealtime(true);
+        showProgress(0);
+        const res = await recordClip({ video: vc, start, end, shapes: annot.shapes, barText, onProgress: showProgress });
+        clip = { ...res, parcel: c.parcel, stale: false };
+        track('clip-realtime');
+      }
     } finally {
       recOverlay.hidden = true;
       document.title = title;
       document.removeEventListener('visibilitychange', onHide);
-      recordBtn.textContent = '● อัดคลิป 1280×720';
+      recordBtn.textContent = '● สร้างคลิป 1280×720';
       recordProgress.hidden = true;
       await vc.seek(back);
       updateTime();
@@ -505,7 +633,9 @@ recordBtn.addEventListener('click', () =>
       clip.blob.size > 10 * 1024 * 1024 ? 'เกิน 10MB ลองตัดช่วงให้สั้นลง' : '',
       wentHidden ? 'มีการสลับไปแท็บอื่นระหว่างอัด คลิปอาจกระตุกหรือขาด — แนะนำให้อัดใหม่โดยเปิดหน้านี้ค้างไว้' : '',
     ].filter(Boolean);
-    showMsg(...withNotes(`อัดคลิปเสร็จ ${clip.format.ext.toUpperCase()} ${formatBytes(clip.blob.size)} (${(end - start).toFixed(1)} วิ)`, notes));
+    const took = ((performance.now() - t0) / 1000).toFixed(1);
+    const how = realtime ? 'อัดแบบเวลาจริง' : `ใช้เวลาสร้าง ${took} วิ`;
+    showMsg(...withNotes(`สร้างคลิปเสร็จ ${clip.format.ext.toUpperCase()} ${formatBytes(clip.blob.size)} (คลิปยาว ${total.toFixed(1)} วิ · ${how})`, notes));
   }),
 );
 
@@ -545,6 +675,7 @@ $('zipBtn').addEventListener('click', () =>
     if (!files.length) return showMsg('ยังไม่มีไฟล์ให้รวม — ต้องมีภาพ CCTV, ภาพ FMS, คลิป หรือรูปหลักฐาน LT อย่างน้อย 1 อย่าง', 'warn');
     const zip = await buildZip(files);
     download(zip, n.zip);
+    track('zip');
     renderFmsStatus();
     renderFiles();
     const extra = attachments.count ? ` · รูปหลักฐาน LT ${attachments.count} รูป` : '';
@@ -567,12 +698,36 @@ cctvTimeInput.value = saved.cctvTime ?? '';
 destInput.value = saved.dest ?? '';
 ltInput.value = saved.lt ?? '';
 for (const el of [parcelInput, statusInput, fmsTimeInput, cctvTimeInput, destInput, ltInput]) el.addEventListener('input', onFormChange);
-// The parcel number and Lost status are in the JPG header (the number also in file names).
-parcelInput.addEventListener('input', invalidateEvidence);
-statusInput.addEventListener('input', invalidateEvidence);
+// The parcel number, LT number and Lost status are in the JPG header (the parcel also in file names).
+for (const el of [parcelInput, statusInput, ltInput]) el.addEventListener('input', invalidateEvidence);
+
+// Clears everything that belongs to one case. The opened CCTV clip and the shapes stay,
+// since the next parcel is often on the same clip.
+$('newCaseBtn').addEventListener('click', () => {
+  if (busy) return;
+  if (!confirm('เริ่มเคสใหม่?\nจะล้างข้อมูลเคส ภาพ FMS รูปหลักฐาน LT เฟรมที่เลือก และคลิปที่อัดไว้\n(คลิป CCTV ที่เปิดอยู่และวงยังอยู่)')) return;
+  for (const el of [parcelInput, fmsTimeInput, cctvTimeInput, destInput, ltInput]) el.value = '';
+  statusInput.value = '';
+  fmsData.fms = fmsData.point = fmsData.evidence = undefined;
+  attachments.clear();
+  chosen = null;
+  clip = null;
+  clipStart.value = clipEnd.value = '';
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = '';
+  evidencePreview.hidden = true;
+  resultMsg.hidden = true;
+  resultCard.hidden = true;
+  onFormChange();
+  renderFms();
+  renderChosen();
+  invalidateEvidence();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 onFormChange();
 renderChosen();
 renderFmsStatus();
+initStats();
 
 if (import.meta.env.DEV) {
   Object.assign(window, { __cctv: { loadFile, setFms, fmsData, annot, vc, attachments } });

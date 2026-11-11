@@ -46,6 +46,14 @@ export class Attachments {
     return added;
   }
 
+  clear(): void {
+    for (const list of this.items.values()) {
+      list.forEach((item) => URL.revokeObjectURL(item.url));
+      list.length = 0;
+    }
+    this.changed();
+  }
+
   remove(key: string, index: number): void {
     const [item] = this.items.get(key)!.splice(index, 1);
     if (item) URL.revokeObjectURL(item.url);

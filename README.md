@@ -26,14 +26,16 @@ npm run build    # ได้ไฟล์ static ใน dist/ (base: './' วา�
 | `src/video.ts` | โหลดคลิปด้วย object URL, วัด fps, seek / step เฟรม, จับภาพเฟรม |
 | `src/annotate.ts` | วงรี/กรอบ (พิกัดเป็นพิกเซลของวิดีโอ), editor ลาก-ย้าย-ย่อขยาย-undo |
 | `src/evidence.ts` | วาดภาพหลักฐาน 2160×855 → JPG 0.92 |
-| `src/clip.ts` | อัดคลิป 1280×720 + วง + แถบข้อความ ด้วย MediaRecorder (mp4 ถ้ารองรับ ไม่งั้น webm) |
+| `src/fastclip.ts` | สร้างคลิปเร็ว: demux MP4 (mp4box) → WebCodecs ถอด/เข้ารหัส → mux MP4 (mp4-muxer) · ไม่ต้องเล่นคลิป สลับแท็บได้ |
+| `src/clip.ts` | วาดเฟรมคลิป 1280×720 + วง + แถบข้อความ · fallback อัดแบบเวลาจริงด้วย MediaRecorder สำหรับไฟล์ที่ไม่ใช่ MP4 |
+| `src/ocr.ts` | อ่านนาฬิกามุมจอในกรอบเหลืองด้วย tesseract.js (โหลดเมื่อใช้ครั้งแรก) · การหาเฟรมตามเวลาอยู่ใน `main.ts` |
 | `src/attachments.ts` | รูปหลักฐาน LT (Runsheet / ท้ายรถ / Seal) ตั้งชื่อตามเลข LT ใส่ ZIP เป็นไฟล์ต้นฉบับ |
 | `src/files.ts` | ZIP (JSZip), ดาวน์โหลด |
 | `src/time.ts` | แปลงเวลา HH:MM:SS |
 | `src/storage.ts` | เก็บค่าฟอร์มใน localStorage (ไม่เก็บคลิป/ภาพ) |
+| `src/stats.ts` | นับยอดใช้งานแบบไม่ระบุตัวตน (GoatCounter `bangz`) · ไม่นับตอน `npm run dev` |
 
 ## เฟส 2 (ยังไม่ทำ)
 
-- OCR เวลามุมจอ: อ่านจากพื้นที่กรอบเหลือง (`Annotator.shapes` type `rect`) ด้วย tesseract.js → `normalizeTime()` → ใช้ `VideoController.seek()` ไล่หาเฟรม
 - Google Drive: รับ `OutFile[]` ชุดเดียวกับที่ใช้ทำ ZIP แล้วอัปโหลดแยกโฟลเดอร์ตาม path
 - HEVC fallback: ใน `VideoController.load()` ตอน reject `HEVC_MSG` ให้แปลงด้วย ffmpeg.wasm แล้วโหลด blob ใหม่

@@ -2,11 +2,51 @@ import { drawShapes, type Shape } from './annotate';
 import { FONT, ORANGE } from './evidence';
 import type { VideoController } from './video';
 
-const OUT_W = 1280;
-const OUT_H = 720;
+export const OUT_W = 1280;
+export const OUT_H = 720;
 const BAR_H = 56;
 // ~1.1 Mbps video keeps a 1-minute clip around 8 MB.
-const VIDEO_BPS = 1_100_000;
+export const VIDEO_BPS = 1_100_000;
+
+// One output frame: the source letterboxed above the text bar (nothing in the original
+// frame is covered), with the shapes drawn on top. srcW/srcH = the shapes' coordinate space.
+export function drawClipFrame(
+  ctx: CanvasRenderingContext2D,
+  source: CanvasImageSource,
+  srcW: number,
+  srcH: number,
+  shapes: Shape[],
+  barText: string,
+): void {
+  const s = Math.min(OUT_W / srcW, (OUT_H - BAR_H) / srcH);
+  const dw = srcW * s;
+  const dh = srcH * s;
+  const dx = (OUT_W - dw) / 2;
+  const dy = (OUT_H - BAR_H - dh) / 2;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, OUT_W, OUT_H);
+  ctx.drawImage(source, dx, dy, dw, dh);
+  ctx.save();
+  ctx.translate(dx, dy);
+  ctx.scale(s, s);
+  drawShapes(ctx, shapes, srcH);
+  ctx.restore();
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, OUT_H - BAR_H, OUT_W, BAR_H);
+  ctx.fillStyle = ORANGE;
+  ctx.fillRect(0, OUT_H - BAR_H, 10, BAR_H);
+  ctx.fillStyle = '#fff';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'center';
+  let size = 28;
+  ctx.font = `700 ${size}px ${FONT}`;
+  while (size > 14 && ctx.measureText(barText).width > OUT_W - 40) {
+    size--;
+    ctx.font = `700 ${size}px ${FONT}`;
+  }
+  ctx.fillText(barText, OUT_W / 2, OUT_H - BAR_H / 2 + 2);
+  ctx.textAlign = 'left';
+}
 
 export interface ClipFormat {
   mime: string;
@@ -35,8 +75,8 @@ export interface ClipOptions {
   onProgress?: (fraction: number) => void;
 }
 
-// Plays [start, end] of the video in real time onto a 1280x720 canvas and records it.
-// The video frame is letterboxed above the text bar, so nothing in the original frame is covered.
+// Fallback path: plays [start, end] of the video in real time onto a 1280x720 canvas and
+// records it with MediaRecorder. Used when the fast path (fastclip.ts) can't handle the file.
 export async function recordClip(o: ClipOptions): Promise<{ blob: Blob; format: ClipFormat }> {
   const format = pickFormat();
   if (!format) throw new Error('เบราว์เซอร์นี้อัดคลิปไม่ได้ (ไม่รองรับ MediaRecorder)');
@@ -45,40 +85,7 @@ export async function recordClip(o: ClipOptions): Promise<{ blob: Blob; format: 
   canvas.width = OUT_W;
   canvas.height = OUT_H;
   const ctx = canvas.getContext('2d')!;
-
-  const vw = o.video.width;
-  const vh = o.video.height;
-  const s = Math.min(OUT_W / vw, (OUT_H - BAR_H) / vh);
-  const dw = vw * s;
-  const dh = vh * s;
-  const dx = (OUT_W - dw) / 2;
-  const dy = (OUT_H - BAR_H - dh) / 2;
-
-  const draw = () => {
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, OUT_W, OUT_H);
-    ctx.drawImage(el, dx, dy, dw, dh);
-    ctx.save();
-    ctx.translate(dx, dy);
-    ctx.scale(s, s);
-    drawShapes(ctx, o.shapes, vh);
-    ctx.restore();
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, OUT_H - BAR_H, OUT_W, BAR_H);
-    ctx.fillStyle = ORANGE;
-    ctx.fillRect(0, OUT_H - BAR_H, 10, BAR_H);
-    ctx.fillStyle = '#fff';
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'center';
-    let size = 28;
-    ctx.font = `700 ${size}px ${FONT}`;
-    while (size > 14 && ctx.measureText(o.barText).width > OUT_W - 40) {
-      size--;
-      ctx.font = `700 ${size}px ${FONT}`;
-    }
-    ctx.fillText(o.barText, OUT_W / 2, OUT_H - BAR_H / 2 + 2);
-    ctx.textAlign = 'left';
-  };
+  const draw = () => drawClipFrame(ctx, el, o.video.width, o.video.height, o.shapes, o.barText);
 
   el.pause();
   el.muted = true;

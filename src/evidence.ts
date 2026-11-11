@@ -25,6 +25,7 @@ export interface Point {
 export interface EvidenceInput {
   parcel?: string;
   status?: string; // the parcel's Lost status, e.g. FMHub_LHTransported
+  lt?: string; // LT number of the shuttle trip
   cctvTime?: string | null; // HH:MM:SS read by the user from the CCTV clock
   fmsTime?: string | null; // HH:MM:SS of the status above (FMHub_LHPacking when no status)
   frame?: CanvasImageSource & { width: number; height: number };
@@ -42,8 +43,10 @@ export function statusName(status?: string): string {
   return status || 'FMHub_LHPacking';
 }
 
-export function headerText(parcel?: string, status?: string): string {
-  return ['หลักฐาน CCTV', parcel, status && `สถานะ Lost: ${status}`, 'ยิงขึ้นรถ Shuttle แล้ว'].filter(Boolean).join(' | ');
+export function headerText(parcel?: string, status?: string, lt?: string): string {
+  return ['หลักฐาน CCTV', parcel, lt && `LT: ${lt}`, status && `สถานะ Lost: ${status}`, 'ยิงขึ้นรถ Shuttle แล้ว']
+    .filter(Boolean)
+    .join(' | ');
 }
 
 export function renderEvidence(inp: EvidenceInput): HTMLCanvasElement {
@@ -59,7 +62,7 @@ export function renderEvidence(inp: EvidenceInput): HTMLCanvasElement {
   ctx.fillRect(0, 0, W, HEADER_H);
   ctx.fillStyle = '#fff';
   ctx.textBaseline = 'middle';
-  const header = headerText(inp.parcel, inp.status);
+  const header = headerText(inp.parcel, inp.status, inp.lt);
   fitText(ctx, header, 38, W - PAD * 2);
   ctx.fillText(header, PAD, HEADER_H / 2 + 2);
 
